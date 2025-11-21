@@ -1,0 +1,11 @@
+{
+  "feature_cols": [
+    "races_so_far",
+    "avg_place_last3",
+    "best_place_last5",
+    "last_place",
+    "days_since_last_race",
+    "last_carried_points",
+    "last_scored_points"
+  ]
+}
