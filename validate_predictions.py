@@ -5,6 +5,42 @@ Usage: python validate_predictions.py --predictions data/clean/predictions_tabor
 import pandas as pd
 import argparse
 from pathlib import Path
+import unicodedata
+import re
+
+def normalize_name(name):
+    """Normalize rider name for matching"""
+    if pd.isna(name):
+        return ""
+    # Remove accents
+    name = unicodedata.normalize('NFD', str(name))
+    name = ''.join(char for char in name if unicodedata.category(char) != 'Mn')
+    # Lowercase and clean
+    name = name.lower().strip()
+    # Remove extra spaces
+    name = re.sub(r'\s+', ' ', name)
+    return name
+
+def match_names(name1, name2):
+    """Check if two names match, considering reversed order"""
+    norm1 = normalize_name(name1)
+    norm2 = normalize_name(name2)
+
+    if norm1 == norm2:
+        return True
+
+    # Try reversed
+    parts1 = norm1.split()
+    parts2 = norm2.split()
+
+    if len(parts1) >= 2 and len(parts2) >= 2:
+        reversed1 = f"{parts1[-1]} {' '.join(parts1[:-1])}"
+        reversed2 = f"{parts2[-1]} {' '.join(parts2[:-1])}"
+
+        if reversed1 == norm2 or norm1 == reversed2:
+            return True
+
+    return False
 
 def validate_predictions(predictions_path, results_path, category="Men Elite"):
     """Compare predictions against actual results"""
@@ -17,65 +53,102 @@ def validate_predictions(predictions_path, results_path, category="Men Elite"):
     predictions = pd.read_csv(predictions_path)
     results = pd.read_csv(results_path)
 
-    # Filter results to category
-    results_category = results[results["Category Name"].str.contains(category.split()[0], case=False, na=False)]
+    # Clean up Name column - remove newlines and extra spaces
+    if "Name" in results.columns:
+        results["rider_name"] = results["Name"].str.replace("\n", " ").str.strip()
+    elif "rider_name" in results.columns:
+        results["rider_name"] = results["rider_name"].str.strip()
 
-    # Get actual Top-10
-    actual_top10 = set(results_category[results_category["Place"] <= 10]["rider_name"].str.lower().str.strip())
+    # Results file is already category-specific, no filtering needed
+    results_category = results.copy()
 
-    # Get predicted Top-10
-    predicted_top10 = set(
-        predictions[predictions["Predicted Finish"] == "Top-10"]["Rider"].str.lower().str.strip()
-    )
+    # Get actual Top-10 riders
+    actual_top10_df = results_category[results_category["Place"] <= 10].copy()
+    actual_top10_names = actual_top10_df["rider_name"].tolist()
 
-    # Calculate accuracy
-    correct_predictions = actual_top10 & predicted_top10
-    false_positives = predicted_top10 - actual_top10
-    false_negatives = actual_top10 - predicted_top10
+    # Get predicted Top-10 riders
+    predicted_top10_df = predictions[predictions["Predicted Finish"] == "Top-10"].copy()
+    predicted_top10_names = predicted_top10_df["Rider"].tolist()
 
-    accuracy = len(correct_predictions) / len(actual_top10) if len(actual_top10) > 0 else 0
-    precision = len(correct_predictions) / len(predicted_top10) if len(predicted_top10) > 0 else 0
+    # Match names using fuzzy matching
+    correct_predictions = []
+    false_positives = []
+    false_negatives = list(actual_top10_names)
+
+    for pred_name in predicted_top10_names:
+        matched = False
+        for actual_name in actual_top10_names:
+            if match_names(pred_name, actual_name):
+                correct_predictions.append(actual_name)
+                if actual_name in false_negatives:
+                    false_negatives.remove(actual_name)
+                matched = True
+                break
+        if not matched:
+            false_positives.append(pred_name)
+
+    accuracy = len(correct_predictions) / len(actual_top10_names) if len(actual_top10_names) > 0 else 0
+    precision = len(correct_predictions) / len(predicted_top10_names) if len(predicted_top10_names) > 0 else 0
 
     # Display results
     print(f"\n✅ CORRECT PREDICTIONS ({len(correct_predictions)}):")
     for rider in sorted(correct_predictions):
-        print(f"  ✓ {rider.title()}")
+        actual_place = results_category[results_category["rider_name"] == rider]["Place"].values[0]
+        print(f"  ✓ {rider} (P{actual_place})")
 
     print(f"\n❌ MISSED ({len(false_negatives)}):")
     for rider in sorted(false_negatives):
-        actual_place = results_category[results_category["rider_name"].str.lower() == rider]["Place"].values[0]
-        print(f"  ✗ {rider.title()} (finished {actual_place})")
+        actual_place = results_category[results_category["rider_name"] == rider]["Place"].values[0]
+        print(f"  ✗ {rider} (finished P{actual_place})")
 
     print(f"\n⚠️  FALSE POSITIVES ({len(false_positives)}):")
-    for rider in sorted(false_positives):
-        if rider in results_category["rider_name"].str.lower().values:
-            actual_place = results_category[results_category["rider_name"].str.lower() == rider]["Place"].values[0]
-            print(f"  • {rider.title()} (predicted Top-10, finished {actual_place})")
-        else:
-            print(f"  • {rider.title()} (predicted Top-10, did not finish)")
+    for pred_rider in sorted(false_positives):
+        # Try to find in results with name matching
+        found = False
+        for actual_rider in results_category["rider_name"].tolist():
+            if match_names(pred_rider, actual_rider):
+                actual_place = results_category[results_category["rider_name"] == actual_rider]["Place"].values[0]
+                print(f"  • {pred_rider} (predicted Top-10, finished P{actual_place})")
+                found = True
+                break
+        if not found:
+            print(f"  • {pred_rider} (predicted Top-10, did not start)")
 
     # Summary
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"Top-10 Accuracy: {accuracy*100:.1f}% ({len(correct_predictions)}/{len(actual_top10)})")
-    print(f"Precision: {precision*100:.1f}% ({len(correct_predictions)}/{len(predicted_top10)})")
+    print(f"Top-10 Accuracy: {accuracy*100:.1f}% ({len(correct_predictions)}/{len(actual_top10_names)})")
+    print(f"Precision: {precision*100:.1f}% ({len(correct_predictions)}/{len(predicted_top10_names)})")
 
     # Podium check
-    actual_podium = set(results_category[results_category["Place"] <= 3]["rider_name"].str.lower().str.strip())
-    predicted_podium_riders = predictions.nlargest(3, "Top-3 Probability")["Rider"].str.lower().str.strip().tolist()
+    actual_podium_df = results_category[results_category["Place"] <= 3].sort_values("Place")
+    actual_podium_names = actual_podium_df["rider_name"].tolist()
 
-    podium_hits = sum(1 for r in predicted_podium_riders if r in actual_podium)
+    predicted_podium_df = predictions.nlargest(3, "Top-3 Probability")
+    predicted_podium_names = predicted_podium_df["Rider"].tolist()
+
+    podium_hits = 0
+    for pred_name in predicted_podium_names:
+        for actual_name in actual_podium_names:
+            if match_names(pred_name, actual_name):
+                podium_hits += 1
+                break
 
     print(f"Podium Accuracy: {podium_hits}/3")
     print(f"\nActual Podium:")
-    for idx, rider in enumerate(sorted(actual_podium), 1):
-        print(f"  {idx}. {rider.title()}")
+    for idx, rider in enumerate(actual_podium_names, 1):
+        print(f"  {idx}. {rider}")
 
     print(f"\nPredicted Podium:")
-    for idx, rider in enumerate(predicted_podium_riders, 1):
-        status = "✓" if rider in actual_podium else "✗"
-        print(f"  {status} {idx}. {rider.title()}")
+    for idx, pred_rider in enumerate(predicted_podium_names, 1):
+        matched = False
+        for actual_rider in actual_podium_names:
+            if match_names(pred_rider, actual_rider):
+                matched = True
+                break
+        status = "✓" if matched else "✗"
+        print(f"  {status} {idx}. {pred_rider}")
 
     print("\n" + "=" * 70)
 

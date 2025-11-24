@@ -28,7 +28,7 @@ Men Elite Podium Predictions:
 2. Ríman
 3. Ulík
 
-Full predictions: [link to TABOR_PREDICTIONS_2025-11-23.md]
+Full predictions: [https://github.com/martinalex/cyclocross-predictions/blob/main/TABOR_PREDICTIONS_2025-11-23.md]
 
 Will validate accuracy after Sunday's race!
 ```
