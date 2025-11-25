@@ -1,7 +1,7 @@
 # VeloPredict v2 Improvements (Post-Tabor)
 
 **Date:** Nov 25, 2025
-**Status:** Ready for Namur predictions
+**Status:** Ready for Flamanville predictions
 
 ---
 
@@ -79,9 +79,9 @@ When you provide the updated UCI rankings CSV, we'll update feature extraction t
 
 ---
 
-## 📊 Expected Performance (Namur)
+## 📊 Expected Performance (Flamanville)
 
-| Metric | Tabor (v1) | Namur (v2 Expected) | Change |
+| Metric | Tabor (v1) | Flamanville (v2 Expected) | Change |
 |--------|-----------|---------------------|--------|
 | **Top-10 Accuracy** | 90.0% | 85-90% | Maintain |
 | **Precision** | 42% | 60% | **+18%** ✅ |
@@ -95,7 +95,7 @@ When you provide the updated UCI rankings CSV, we'll update feature extraction t
 ### Default (Recommended):
 ```bash
 python predict_race.py \
-  --startlist data/startlists/namur_men_elite_2025-11-30.csv \
+  --startlist data/startlists/flamanville_men_elite_2025-11-30.csv \
   --category "Men Elite"
 ```
 
@@ -109,7 +109,7 @@ Uses:
 from predict_race import predict_race
 
 predictions = predict_race(
-    startlist_path="data/startlists/namur_men_elite.csv",
+    startlist_path="data/startlists/flamanville_men_elite.csv",
     category="Men Elite",
     confidence_threshold=0.60,  # More conservative (fewer predictions)
     enable_dns_filter=True       # Keep DNS filtering
@@ -134,7 +134,7 @@ To validate these improvements worked, compare:
 - Precision: 47.4%
 - DNS issues: Ulík, Groenendaal predicted for podium (both DNS)
 
-**Namur (v2):**
+**Flamanville (v2):**
 - Predicted: ~12-15 Top-10 (Men Elite) ← Lower count
 - Expected: ~9-10 correct ← Same accuracy
 - Precision: ~60-70% ← Better precision
@@ -142,9 +142,9 @@ To validate these improvements worked, compare:
 
 ---
 
-## 🚀 Next Improvements (After Namur)
+## 🚀 Next Improvements (After Flamanville)
 
-If Namur validation shows these quick wins worked, consider:
+If Flamanville validation shows these quick wins worked, consider:
 
 1. **Podium-Specific Model** (Priority: HIGH if podium still weak)
    - Separate model just for Top-3 prediction
@@ -186,14 +186,14 @@ If Namur validation shows these quick wins worked, consider:
 
 ---
 
-## ✅ Ready For Namur
+## ✅ Ready For Flamanville
 
 All improvements implemented and ready to test on next race!
 
 **Timeline:**
 - ✅ Quick wins implemented (30 mins)
-- 🔄 You create Namur startlist (5 mins)
-- 🔄 Generate predictions (2 mins)
+- ✅ You create Flamanville startlist (5 mins)
+- ✅ Generate predictions (2 mins)
 - ⏳ Validate Sunday (5 mins)
 - ⏳ Compare v1 vs v2 performance
 
@@ -204,4 +204,4 @@ All improvements implemented and ready to test on next race!
 
 ---
 
-**Let's see if these quick wins improve Namur predictions!** 🚀
+**Let's see if these quick wins improve Flamanville predictions!** 🚀

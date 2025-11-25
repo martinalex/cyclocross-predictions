@@ -213,7 +213,7 @@ This is Phase 1 of VeloIntel - AI-powered coaching for cyclists.
 
 Full code + methodology: [GitHub link]
 
-Who wants predictions for next weekend's Namur World Cup?
+Who wants predictions for next weekend's Flamanville race?
 
 #MachineLearning #DataScience #Cyclocross #ProductManagement
 ```
@@ -221,7 +221,7 @@ Who wants predictions for next weekend's Namur World Cup?
 **Engagement Strategy:**
 - Post Monday morning (11 AM EST)
 - Reply to all comments within 2 hours
-- Offer to predict Namur race for anyone who asks
+- Offer to predict Flamanville race for anyone who asks
 - Track engagement: goal 100+ impressions, 5+ comments
 
 ---
@@ -258,10 +258,10 @@ From NEXT_STEPS.md Week 1 goals:
 ## 🚀 Immediate Action Items
 
 1. **Monday Morning:** Post LinkedIn summary with 90% accuracy
-2. **Monday Afternoon:** Respond to engagement, offer Namur predictions
+2. **Monday Afternoon:** Respond to engagement, offer Flamanville predictions
 3. **Tuesday:** Fix precision issue (add confidence thresholds)
 4. **Wednesday:** Incorporate Nov 17 UCI rankings update
-5. **Weekend:** Generate and validate Namur predictions
+5. **Weekend:** Generate and validate Flamanville predictions
 
 ---
 
