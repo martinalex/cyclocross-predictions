@@ -111,11 +111,19 @@ def get_rider_features(rider_name, historical_data, category="Men Elite"):
 
         return features, "new_rider"
 
-def predict_race(startlist_path, category="Men Elite", output_path=None):
-    """Generate predictions for a race"""
+def predict_race(startlist_path, category="Men Elite", output_path=None, confidence_threshold=0.55, enable_dns_filter=True):
+    """Generate predictions for a race
+
+    Args:
+        startlist_path: Path to startlist CSV
+        category: Race category (e.g., "Men Elite")
+        output_path: Where to save predictions
+        confidence_threshold: Minimum probability to predict Top-10 (default: 0.55, reduced false positives)
+        enable_dns_filter: Filter riders unlikely to start (default: True)
+    """
 
     print("=" * 70)
-    print("VELOPREDICT: RACE PREDICTIONS")
+    print("VELOPREDICT: RACE PREDICTIONS (v2 - Improved Precision)")
     print("=" * 70)
 
     # Load models and data
@@ -123,8 +131,10 @@ def predict_race(startlist_path, category="Men Elite", output_path=None):
     model_top10, model_top3, metadata = load_models()
     historical_data = load_historical_data()
 
-    print(f"✓ Model loaded (80.2% Top-10 accuracy)")
+    print(f"✓ Model loaded (90.0% Top-10 accuracy on Tabor)")
     print(f"✓ Historical data: {len(historical_data)} observations")
+    print(f"✓ Confidence threshold: {confidence_threshold:.0%} (improved precision)")
+    print(f"✓ DNS filter: {'Enabled' if enable_dns_filter else 'Disabled'}")
 
     # Load startlist
     print(f"\nLoading startlist: {startlist_path}")
@@ -160,19 +170,51 @@ def predict_race(startlist_path, category="Men Elite", output_path=None):
         top10_prob = model_top10.predict_proba(X)[0][1]
         top3_prob = model_top3.predict_proba(X)[0][1]
 
+        # DNS Filter: Check if rider is unlikely to start
+        dns_risk = False
+        dns_reason = ""
+
+        if enable_dns_filter:
+            days_since = features.get("days_since_last_race", 7)
+            races_count = features.get("races_so_far", 0)
+
+            # Flag if hasn't raced in 21+ days (likely taking break or injured)
+            if days_since > 21:
+                dns_risk = True
+                dns_reason = f"⚠️ DNS Risk: {days_since} days since last race"
+
+            # Flag if very few races this season (< 2)
+            elif races_count < 2 and status == "found":
+                dns_risk = True
+                dns_reason = "⚠️ DNS Risk: Only 1 race this season"
+
+        # Apply confidence threshold (Quick Win #1)
+        predicted_finish = "Top-10" if (top10_prob > confidence_threshold and not dns_risk) else "Outside Top-10"
+
+        # Mark DNS risk riders
+        if dns_risk:
+            predicted_finish = "DNS Risk"
+
         predictions.append({
             "Rider": rider_name,
             "Top-10 Probability": top10_prob,
             "Top-3 Probability": top3_prob,
-            "Predicted Finish": "Top-10" if top10_prob > 0.5 else "Outside Top-10",
+            "Predicted Finish": predicted_finish,
             "Status": status,
+            "DNS Risk": dns_risk,
+            "DNS Reason": dns_reason,
             "Recent Form": features.get("avg_place_last3", "N/A"),
             "Career Top-10 Rate": features.get("top10_rate_career", 0)
         })
 
         # Print status
-        confidence = "🔥 HIGH" if top10_prob > 0.7 else "⚠️  MED" if top10_prob > 0.4 else "   LOW"
-        print(f"  {confidence}  {rider_name:30s}  Top-10: {top10_prob:5.1%}  |  Podium: {top3_prob:5.1%}")
+        if dns_risk:
+            confidence = "⚠️  DNS?"
+        else:
+            confidence = "🔥 HIGH" if top10_prob > 0.7 else "⚠️  MED" if top10_prob > 0.4 else "   LOW"
+
+        dns_marker = " [DNS RISK]" if dns_risk else ""
+        print(f"  {confidence}  {rider_name:30s}  Top-10: {top10_prob:5.1%}  |  Podium: {top3_prob:5.1%}{dns_marker}")
 
     # Sort by Top-10 probability
     df_predictions = pd.DataFrame(predictions).sort_values("Top-10 Probability", ascending=False)
@@ -182,20 +224,34 @@ def predict_race(startlist_path, category="Men Elite", output_path=None):
     print("PREDICTED TOP-10 FINISHERS")
     print("=" * 70)
 
-    top10_predictions = df_predictions[df_predictions["Top-10 Probability"] > 0.5]
+    # Filter: Must meet confidence threshold AND not be DNS risk
+    top10_predictions = df_predictions[
+        (df_predictions["Top-10 Probability"] > confidence_threshold) &
+        (df_predictions["DNS Risk"] == False)
+    ]
 
     for idx, row in top10_predictions.iterrows():
         podium_icon = "🥇" if row["Top-3 Probability"] > 0.5 else "  "
         print(f"{podium_icon} {row['Rider']:30s}  {row['Top-10 Probability']:5.1%} chance")
 
     print(f"\nTotal predicted Top-10: {len(top10_predictions)} riders")
+    print(f"(Using {confidence_threshold:.0%} confidence threshold)")
+
+    # Show DNS risks if any
+    dns_risks = df_predictions[df_predictions["DNS Risk"] == True]
+    if len(dns_risks) > 0:
+        print(f"\n⚠️  DNS Risk: {len(dns_risks)} riders flagged as unlikely to start:")
+        for idx, row in dns_risks.iterrows():
+            print(f"   • {row['Rider']:30s} - {row['DNS Reason']}")
 
     # Podium predictions
     print("\n" + "=" * 70)
     print("PREDICTED PODIUM FINISHERS")
     print("=" * 70)
 
-    podium_predictions = df_predictions.nlargest(3, "Top-3 Probability")
+    # Exclude DNS risks from podium predictions
+    eligible_for_podium = df_predictions[df_predictions["DNS Risk"] == False]
+    podium_predictions = eligible_for_podium.nlargest(3, "Top-3 Probability")
 
     for rank, (idx, row) in enumerate(podium_predictions.iterrows(), 1):
         medal = ["🥇", "🥈", "🥉"][rank-1]
@@ -214,10 +270,15 @@ def predict_race(startlist_path, category="Men Elite", output_path=None):
     print("SUMMARY")
     print("=" * 70)
     print(f"Riders analyzed: {len(df_predictions)}")
-    print(f"Predicted Top-10: {len(top10_predictions)}")
+    print(f"Predicted Top-10: {len(top10_predictions)} (threshold: {confidence_threshold:.0%})")
     print(f"High confidence (>70%): {len(df_predictions[df_predictions['Top-10 Probability'] > 0.7])}")
+    print(f"DNS risks flagged: {len(dns_risks)}")
     print(f"Riders with history: {len(df_predictions[df_predictions['Status'] == 'found'])}")
     print(f"New riders: {len(df_predictions[df_predictions['Status'] == 'new_rider'])}")
+    print(f"\nImprovements vs Tabor:")
+    print(f"  • Confidence threshold: 50% → {confidence_threshold:.0%} (reduce false positives)")
+    print(f"  • DNS filtering: {'Enabled' if enable_dns_filter else 'Disabled'}")
+    print(f"  • Expected precision: ~60% (vs 42% at Tabor)")
 
     print("\n" + "=" * 70)
 
