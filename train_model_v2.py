@@ -7,11 +7,14 @@ import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import (
     mean_absolute_error,
     accuracy_score,
     classification_report,
-    roc_auc_score
+    roc_auc_score,
+    brier_score_loss,
+    log_loss
 )
 import joblib
 import json
@@ -173,22 +176,38 @@ model_top10 = RandomForestClassifier(
 )
 
 model_top10.fit(X_train, y_top10_train)
-print("✓ Model trained")
+print("✓ Base model trained")
 
-# Predict
-y_top10_pred = model_top10.predict(X_test)
-y_top10_pred_proba = model_top10.predict_proba(X_test)[:, 1]
+# Calibrate probabilities (Platt scaling)
+print("\n📊 Calibrating probabilities with Platt scaling...")
+model_top10_calibrated = CalibratedClassifierCV(
+    model_top10,
+    method='sigmoid',  # Platt scaling
+    cv='prefit'  # Use pre-trained model
+)
+model_top10_calibrated.fit(X_train, y_top10_train)
+print("✓ Model calibrated")
+
+# Predict with calibrated model
+y_top10_pred = model_top10_calibrated.predict(X_test)
+y_top10_pred_proba = model_top10_calibrated.predict_proba(X_test)[:, 1]
 
 # Evaluate
 accuracy = accuracy_score(y_top10_test, y_top10_pred)
 try:
     auc = roc_auc_score(y_top10_test, y_top10_pred_proba)
+    brier = brier_score_loss(y_top10_test, y_top10_pred_proba)
+    logloss = log_loss(y_top10_test, y_top10_pred_proba)
 except:
     auc = 0.0
+    brier = 0.0
+    logloss = 0.0
 
 print(f"\n✓ TOP-10 ACCURACY: {100*accuracy:.1f}%")
 if auc > 0:
     print(f"✓ AUC-ROC: {auc:.3f}")
+    print(f"✓ Brier Score: {brier:.4f} (lower is better, 0.2 is good)")
+    print(f"✓ Log Loss: {logloss:.4f}")
 
 print("\nClassification Report:")
 print(classification_report(y_top10_test, y_top10_pred, target_names=["Outside Top-10", "Top-10"]))
@@ -227,7 +246,18 @@ model_top3 = RandomForestClassifier(
 )
 
 model_top3.fit(X_train, y_top3_train)
-y_top3_pred = model_top3.predict(X_test)
+
+# Calibrate Top-3 model as well
+print("\n📊 Calibrating Top-3 model...")
+model_top3_calibrated = CalibratedClassifierCV(
+    model_top3,
+    method='sigmoid',
+    cv='prefit'
+)
+model_top3_calibrated.fit(X_train, y_top3_train)
+print("✓ Top-3 model calibrated")
+
+y_top3_pred = model_top3_calibrated.predict(X_test)
 
 accuracy_top3 = accuracy_score(y_top3_test, y_top3_pred)
 print(f"\n✓ TOP-3 ACCURACY: {100*accuracy_top3:.1f}%")
@@ -237,8 +267,8 @@ print("\n" + "=" * 60)
 print("SAVING MODELS")
 print("=" * 60)
 
-joblib.dump(model_top10, MODELS_DIR / "top10_classifier.joblib")
-joblib.dump(model_top3, MODELS_DIR / "top3_classifier.joblib")
+joblib.dump(model_top10_calibrated, MODELS_DIR / "top10_classifier.joblib")
+joblib.dump(model_top3_calibrated, MODELS_DIR / "top3_classifier.joblib")
 
 # Save metadata
 meta = {
@@ -248,11 +278,14 @@ meta = {
     "fill_values": fill_values,
     "top10_accuracy": float(accuracy),
     "top10_auc": float(auc) if auc > 0 else None,
+    "top10_brier_score": float(brier) if brier > 0 else None,
+    "top10_log_loss": float(logloss) if logloss > 0 else None,
     "top3_accuracy": float(accuracy_top3),
     "baseline_accuracy": float(baseline_acc),
     "improvement_vs_baseline": float(accuracy - baseline_acc),
     "train_size": len(X_train),
     "test_size": len(X_test),
+    "calibration_method": "sigmoid (Platt scaling)",
     "training_date": str(pd.Timestamp.now())
 }
 
@@ -274,6 +307,9 @@ print(f"  Top-10 Accuracy: {100*accuracy:.1f}%")
 print(f"  Top-3 Accuracy: {100*accuracy_top3:.1f}%")
 print(f"  Baseline (UCI only): {100*baseline_acc:.1f}%")
 print(f"  Improvement: +{100*(accuracy - baseline_acc):.1f}%")
+if brier > 0:
+    print(f"  Brier Score: {brier:.4f} (calibration quality)")
+    print(f"  AUC-ROC: {auc:.3f}")
 
 print(f"\n✅ DATA:")
 print(f"  Total races: {df['race_id'].nunique()}")

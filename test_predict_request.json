@@ -1,0 +1,11 @@
+{
+  "riders": [
+    {"rider_name": "Thibau Nys", "uci_points": 850.0, "team": "Baloise Trek Lions"},
+    {"rider_name": "Laurens Sweeck", "uci_points": 720.0, "team": "Crelan Corendon"},
+    {"rider_name": "Joris Nieuwenhuis", "uci_points": 680.0},
+    {"rider_name": "Lars van der Haar", "uci_points": 650.0},
+    {"rider_name": "Michael Vanthourenhout", "uci_points": 620.0}
+  ],
+  "category": "Men Elite",
+  "confidence_threshold": 0.55
+}

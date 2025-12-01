@@ -21,9 +21,10 @@ plotly==5.18.0
 jupyter==1.0.0
 ipykernel==6.29.0
 
-# Future: API deployment
-# fastapi==0.109.0
-# uvicorn==0.27.0
+# API deployment (Phase 1 requirement)
+fastapi==0.115.0
+uvicorn==0.32.0
+pydantic==2.9.0
 
 # Future: Wearables integrations (VeloIntel phase)
 # stravalib==1.4

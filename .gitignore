@@ -64,3 +64,15 @@ env/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# API/FastAPI
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Prediction outputs (these are generated)
+predictions_*.csv
+data/clean/predictions_*.csv
+
+# Temporary startlists
+temp_*.csv
