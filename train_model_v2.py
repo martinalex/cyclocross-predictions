@@ -22,7 +22,7 @@ MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
 print("=" * 60)
-print("TRAINING IMPROVED MODEL - TOP-10 PREDICTION")
+print("TRAINING v4 MODEL - UCI-BASED INFERENCE FOR NEW RIDERS")
 print("=" * 60)
 
 # Load enriched data
@@ -89,18 +89,37 @@ X = pd.get_dummies(X, columns=categorical_features, drop_first=True)
 
 # Fill NaN with smart defaults
 print("\n" + "=" * 60)
-print("HANDLING MISSING VALUES")
+print("HANDLING MISSING VALUES (v4 - UCI-BASED INFERENCE)")
 print("=" * 60)
 
-# For first-time riders, use UCI points as proxy for historical performance
-median_place = df["Place"].median()
+# v4 IMPROVEMENT: Use UCI points to infer expected performance for new riders
+# Instead of generic percentile, use linear regression: place = 9.31 + 51.36 * uci_normalized
+# NOTE: UCI "Carried Points" are inverted (lower points = better ranking)
+# So: low uci_normalized = strong rider → predicts low place (strong finish)
+#     high uci_normalized = weak rider → predicts high place (weak finish)
 
+import config
+
+# Fill place-related NaN values using UCI-based inference
+print("\nApplying UCI-based inference for missing historical data...")
+
+for col in ["avg_place_last3", "best_place_last5", "last_place"]:
+    mask = X[col].isna()
+    if mask.sum() > 0:
+        # For each NaN, infer place from UCI points
+        X.loc[mask, col] = (
+            config.UCI_PLACE_INTERCEPT +
+            config.UCI_PLACE_SLOPE * X.loc[mask, "uci_points_normalized"]
+        ).clip(5, 70)  # Bound to reasonable range
+
+print(f"  ✓ Inferred {mask.sum()} place values from UCI points")
+print(f"    Example: Strong rider (UCI norm=0.17) → place≈18 (strong finish)")
+print(f"             Weak rider (UCI norm=0.60) → place≈40 (weak finish)")
+
+# Fill remaining non-place features with standard defaults
 fill_values = {
-    "uci_points_normalized": 0,  # New rider
+    "uci_points_normalized": 0,  # Truly unknown rider
     "races_so_far": 0,
-    "avg_place_last3": median_place,
-    "best_place_last5": median_place,
-    "last_place": median_place,
     "days_since_last_race": 14,  # Typical race frequency
     "last_carried_points": 0,
     "last_scored_points": 0,

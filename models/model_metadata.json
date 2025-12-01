@@ -13,6 +13,7 @@
     "series_appearances",
     "is_elite",
     "is_women",
+    "points_tier_low",
     "points_tier_mid",
     "team_tier_other_team",
     "team_tier_top_team"
@@ -39,9 +40,6 @@
   "fill_values": {
     "uci_points_normalized": 0,
     "races_so_far": 0,
-    "avg_place_last3": 26.0,
-    "best_place_last5": 26.0,
-    "last_place": 26.0,
     "days_since_last_race": 14,
     "last_carried_points": 0,
     "last_scored_points": 0,
@@ -51,12 +49,12 @@
     "is_elite": 0,
     "is_women": 0
   },
-  "top10_accuracy": 0.8015564202334631,
-  "top10_auc": 0.834238893253033,
-  "top3_accuracy": 0.9150453955901426,
-  "baseline_accuracy": 0.39105058365758755,
-  "improvement_vs_baseline": 0.4105058365758755,
-  "train_size": 6166,
-  "test_size": 1542,
-  "training_date": "2025-11-21 10:13:35.642662"
+  "top10_accuracy": 0.7883258499037845,
+  "top10_auc": 0.8199809572715407,
+  "top3_accuracy": 0.9114817190506735,
+  "baseline_accuracy": 0.4060295060936498,
+  "improvement_vs_baseline": 0.3822963438101347,
+  "train_size": 6234,
+  "test_size": 1559,
+  "training_date": "2025-12-01 07:28:56.802691"
 }

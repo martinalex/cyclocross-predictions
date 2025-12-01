@@ -88,15 +88,37 @@ def get_rider_features(rider_name, historical_data, category="Men Elite"):
 
         return features, "found"
     else:
-        # New rider - use defaults
-        print(f"  ⚠️  {rider_name}: No history found, using defaults")
+        # New rider - infer performance from UCI points if available
+        # v4 IMPROVEMENT: Use UCI-based inference instead of generic defaults
+
+        # Try to get UCI points from historical data (even if no race history)
+        uci_match = historical_data[
+            (historical_data["rider_name_norm"] == norm_name) |
+            (historical_data["rider_name_norm"] == reversed_name)
+        ]
+
+        if len(uci_match) > 0:
+            uci_points_norm = uci_match.iloc[0]["uci_points_normalized"]
+        else:
+            uci_points_norm = 0.1  # Low default
+
+        # Infer expected place from UCI points (linear regression model)
+        if uci_points_norm > 0:
+            inferred_place = config.UCI_PLACE_INTERCEPT + config.UCI_PLACE_SLOPE * uci_points_norm
+            inferred_place = max(5, min(70, inferred_place))  # Bound to 5-70
+            inference_source = f"UCI-based (norm={uci_points_norm:.3f})"
+        else:
+            inferred_place = config.MEDIAN_PLACE_DEFAULT
+            inference_source = "generic default"
+
+        print(f"  ⚠️  {rider_name}: No history found, using {inference_source} → expected place ~{inferred_place:.0f}")
 
         features = {
-            "uci_points_normalized": 0.1,  # Low but not zero
+            "uci_points_normalized": uci_points_norm,
             "races_so_far": 0,
-            "avg_place_last3": config.MEDIAN_PLACE_DEFAULT,
-            "best_place_last5": config.MEDIAN_PLACE_DEFAULT,
-            "last_place": config.MEDIAN_PLACE_DEFAULT,
+            "avg_place_last3": inferred_place,  # v4: UCI-based instead of generic
+            "best_place_last5": inferred_place,  # v4: UCI-based instead of generic
+            "last_place": inferred_place,        # v4: UCI-based instead of generic
             "days_since_last_race": 14,
             "last_carried_points": 0,
             "last_scored_points": 0,
@@ -123,7 +145,7 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
     """
 
     print("=" * 70)
-    print("VELOPREDICT: RACE PREDICTIONS (v2 - Improved Precision)")
+    print("VELOPREDICT: RACE PREDICTIONS (v4 - UCI-Based Inference)")
     print("=" * 70)
 
     # Load models and data

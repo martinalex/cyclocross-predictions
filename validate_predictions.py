@@ -59,6 +59,10 @@ def validate_predictions(predictions_path, results_path, category="Men Elite"):
     elif "rider_name" in results.columns:
         results["rider_name"] = results["rider_name"].str.strip()
 
+    # Handle both "Place" and "Position" column names
+    if "Position" in results.columns:
+        results["Place"] = results["Position"]
+
     # Results file is already category-specific, no filtering needed
     results_category = results.copy()
 
