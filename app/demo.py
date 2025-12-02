@@ -91,36 +91,51 @@ tab1, tab2, tab3 = st.tabs(["🔮 Predict Race", "📈 Model Insights", "📚 Ab
 with tab1:
     st.header("Predict Top-10 Finishers")
 
+    # Category selection
+    st.markdown("### Select Category")
+    category = st.selectbox(
+        "Choose race category",
+        options=["Men Elite", "Women Elite", "Men Under 23", "Men Junior", "Women Junior"],
+        index=0
+    )
+
     # Sample rider selection
     st.markdown("### Select Riders to Evaluate")
 
-    # Get unique riders who have raced recently
+    # Get unique riders who have raced recently in selected category
     recent_riders = (
-        historical_data[historical_data["race_date"] > "2024-11-01"]
+        historical_data[
+            (historical_data["race_date"] > "2024-11-01") &
+            (historical_data["Category Name"] == category)
+        ]
         .groupby("rider_name")
         .agg({
             "Place": "mean",
-            "uci_points_normalized": "last",
+            "Carried Points": "last",
             "team_tier": "last",
-            "top10_rate_career": "last"
+            "top10_rate_career": "last",
+            "Team Name": "last"
         })
-        .sort_values("uci_points_normalized", ascending=False)
+        .sort_values("Carried Points", ascending=False)
         .head(50)
     )
 
     # Display rider selector
     selected_riders = st.multiselect(
-        "Choose riders (showing top 50 by UCI points)",
+        f"Choose riders from {category} (showing top 50 by UCI points)",
         options=recent_riders.index.tolist(),
-        default=recent_riders.index.tolist()[:10]
+        default=recent_riders.index.tolist()[:10] if len(recent_riders) >= 10 else recent_riders.index.tolist()
     )
 
     if selected_riders:
-        # Get latest features for selected riders
+        # Get latest features for selected riders in this category
         predictions = []
 
         for rider in selected_riders:
-            rider_data = historical_data[historical_data["rider_name"] == rider].iloc[-1]
+            rider_data = historical_data[
+                (historical_data["rider_name"] == rider) &
+                (historical_data["Category Name"] == category)
+            ].iloc[-1]
 
             # Prepare features
             X = pd.DataFrame([rider_data[config.NUMERIC_FEATURES + config.CATEGORICAL_FEATURES]])
