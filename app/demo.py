@@ -103,6 +103,7 @@ with tab1:
     st.markdown("### Select Riders to Evaluate")
 
     # Get unique riders who have raced recently in selected category
+    # Note: Lower UCI points = better ranking for elite riders
     recent_riders = (
         historical_data[
             (historical_data["race_date"] > "2024-11-01") &
@@ -116,7 +117,7 @@ with tab1:
             "top10_rate_career": "last",
             "Team Name": "last"
         })
-        .sort_values("Carried Points", ascending=False)
+        .sort_values("Carried Points", ascending=True)  # Lower points = better riders
         .head(50)
     )
 
