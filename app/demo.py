@@ -206,7 +206,10 @@ with tab2:
 
     st.markdown("### 📈 Performance by Category")
 
-    # Show accuracy by category
+    # Show accuracy by category (create is_top10 if it doesn't exist)
+    if "is_top10" not in historical_data.columns:
+        historical_data["is_top10"] = (historical_data["Place"] <= 10).astype(int)
+
     category_stats = historical_data.groupby("Category Name").agg({
         "Place": "count",
         "is_top10": "sum"
