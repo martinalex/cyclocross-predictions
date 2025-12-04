@@ -254,6 +254,11 @@ combined["top10_rate_career"] = (
 print("6. Series-specific features...")
 combined["series_appearances"] = combined.groupby(["rider_name_norm", "series_name"]).cumcount()
 
+# 6b. New rider flag (rider's first race in our dataset = high uncertainty)
+print("6b. New rider flag...")
+combined["is_new_rider"] = (combined["races_so_far"] == 0).astype(int)
+print(f"  New rider observations: {combined['is_new_rider'].sum()} ({100*combined['is_new_rider'].mean():.1f}%)")
+
 # 7. Head-to-head features (per race, against field)
 print("7. Head-to-head features (this takes a while)...")
 from collections import defaultdict

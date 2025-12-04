@@ -51,8 +51,8 @@ except Exception as e:
 
 # Header
 st.title("🚴 VeloPredict: Cyclocross Race Predictions")
-st.markdown("**AI-powered predictions with H2H analysis - 77% Top-10 accuracy**")
-st.caption("Version: v5 (H2H) | Model: Random Forest + Platt Scaling | H2H = #1 Feature (21.4%)")
+st.markdown("**AI-powered predictions with H2H analysis - 78% Top-10 accuracy**")
+st.caption("Version: v6 (H2H + New Rider Penalty) | Model: Random Forest + Platt Scaling | H2H = #1 Feature (22.5%)")
 
 if not model_loaded:
     st.error(f"❌ Model not found. Please run `train_model_v2.py` first.")
@@ -365,8 +365,8 @@ with tab3:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #666;'>"
-    "VeloPredict v5 (H2H) | 77% Top-10 Accuracy | "
-    "H2H = #1 Feature (21.4%) | "
+    "VeloPredict v6 (H2H + New Rider Penalty) | 78% Top-10 Accuracy | "
+    "H2H = #1 Feature (22.5%) | "
     "Random Forest + Platt Scaling | "
     "For educational and strategic planning purposes"
     "</div>",

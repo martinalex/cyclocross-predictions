@@ -388,6 +388,18 @@ Improved VeloPredict Accuracy
 - Jupyter (exploratory analysis)
 - Google Colab (GPU for training)
 
+**Workflow Automation (Phase 2 - Post-Validation):**
+- n8n or Make.com for visual workflow orchestration
+- *Potential use cases:*
+  - VeloPredict: Automated race data scraping → retraining → prediction publishing pipeline
+  - VeloIntel: Daily wearables sync → readiness scoring → personalized notification triggers
+  - VeloIntel: Threshold-based alerts ("HRV dropped 15% - recovery day recommended")
+  - WellnessAI: Challenge completion → points award → user notification chain
+  - WellnessAI: Retailer onboarding and weekly admin digest workflows
+  - WellnessAI: Integration with retailer loyalty systems (many already use Zapier/n8n)
+  - Cross-platform: Phoenix Copilot orchestration across all three platforms
+- *Why Phase 2:* Adds infrastructure complexity; FastAPI + cron sufficient for MVP validation
+
 ## Code Quality Standards
 
 **Remember:** This code will be reviewed by:

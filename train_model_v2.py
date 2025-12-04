@@ -67,7 +67,8 @@ numeric_features = [
     "series_appearances",
     "is_elite",
     "is_women",
-    "h2h_field_score"  # Head-to-head win rate against race field
+    "h2h_field_score",  # Head-to-head win rate against race field
+    "is_new_rider"  # Flag for riders with no history (high uncertainty)
 ]
 
 categorical_features = [
@@ -132,7 +133,8 @@ fill_values = {
     "series_appearances": 0,
     "is_elite": 0,
     "is_women": 0,
-    "h2h_field_score": 0.5  # Neutral H2H score for unknown matchups
+    "h2h_field_score": 0.5,  # Neutral H2H score for unknown matchups
+    "is_new_rider": 0  # Default to known rider
 }
 
 X = X.fillna(fill_values)

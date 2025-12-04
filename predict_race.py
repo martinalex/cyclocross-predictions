@@ -201,6 +201,7 @@ def get_rider_features(rider_name, historical_data, category="Men Elite", startl
             "series_appearances": 0,  # Reset for new series
             "is_elite": 1 if "Elite" in category else 0,
             "is_women": 1 if "Women" in category else 0,
+            "is_new_rider": 0,  # Known rider with history
             "points_tier": latest["points_tier"],
             "team_tier": latest["team_tier"]
         }
@@ -280,6 +281,7 @@ def get_rider_features(rider_name, historical_data, category="Men Elite", startl
         # For new riders, use neutral values that don't trigger training data artifacts
         # - races_so_far=0 in training data means "first race of season" (often good performance)
         # - For truly unknown riders, use median value (~10) to avoid this bias
+        # - is_new_rider=1 tells the model this rider has high uncertainty
         features = {
             "uci_points_normalized": uci_points_norm,
             "races_so_far": 10,  # Neutral value (was 0, which boosted predictions incorrectly)
@@ -294,6 +296,7 @@ def get_rider_features(rider_name, historical_data, category="Men Elite", startl
             "series_appearances": 0,
             "is_elite": 1 if "Elite" in category else 0,
             "is_women": 1 if "Women" in category else 0,
+            "is_new_rider": 1,  # v6: Flag as new rider (model learns to penalize)
             "points_tier": "low",
             "team_tier": "no_team"
         }
@@ -385,6 +388,14 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
         # Predict
         top10_prob = model_top10.predict_proba(X)[0][1]
         top3_prob = model_top3.predict_proba(X)[0][1]
+
+        # v6: Apply new rider discount (model feature has low importance, so apply explicit penalty)
+        # New riders have high uncertainty - discount their predictions by 40%
+        # Data shows: new riders with UCI norm ≤0.2 have 38% top-10 rate, not 80%+
+        if status == "new_rider":
+            NEW_RIDER_DISCOUNT = 0.5  # Reduce predictions by 50%
+            top10_prob = top10_prob * NEW_RIDER_DISCOUNT
+            top3_prob = top3_prob * NEW_RIDER_DISCOUNT
 
         # DNS Filter: Check if rider is unlikely to start
         dns_risk = False

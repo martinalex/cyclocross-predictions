@@ -37,7 +37,8 @@ NUMERIC_FEATURES = [
     "series_appearances",
     "is_elite",
     "is_women",
-    "h2h_field_score"  # Head-to-head win rate against race field
+    "h2h_field_score",  # Head-to-head win rate against race field
+    "is_new_rider"  # Flag for riders with no history in our dataset (high uncertainty)
 ]
 
 CATEGORICAL_FEATURES = [
@@ -93,7 +94,8 @@ FILL_VALUES = {
     "series_appearances": 0,
     "is_elite": 0,
     "is_women": 0,
-    "h2h_field_score": 0.5  # Neutral H2H score for unknown matchups
+    "h2h_field_score": 0.5,  # Neutral H2H score for unknown matchups
+    "is_new_rider": 0  # Default to known rider (training data fills this)
 }
 
 # Categories

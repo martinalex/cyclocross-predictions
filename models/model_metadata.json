@@ -14,6 +14,7 @@
     "is_elite",
     "is_women",
     "h2h_field_score",
+    "is_new_rider",
     "points_tier_low",
     "points_tier_mid",
     "team_tier_other_team",
@@ -33,7 +34,8 @@
     "series_appearances",
     "is_elite",
     "is_women",
-    "h2h_field_score"
+    "h2h_field_score",
+    "is_new_rider"
   ],
   "categorical_features": [
     "points_tier",
@@ -50,17 +52,18 @@
     "series_appearances": 0,
     "is_elite": 0,
     "is_women": 0,
-    "h2h_field_score": 0.5
+    "h2h_field_score": 0.5,
+    "is_new_rider": 0
   },
-  "top10_accuracy": 0.7686658506731946,
-  "top10_auc": 0.769897762364566,
-  "top10_brier_score": 0.17733891682299932,
-  "top10_log_loss": 0.666028970792139,
-  "top3_accuracy": 0.9228886168910648,
-  "baseline_accuracy": 0.4749082007343941,
-  "improvement_vs_baseline": 0.2937576499388005,
-  "train_size": 6535,
-  "test_size": 1634,
+  "top10_accuracy": 0.7763157894736842,
+  "top10_auc": 0.7668354898125168,
+  "top10_brier_score": 0.1701063933716183,
+  "top10_log_loss": 0.6304453626829484,
+  "top3_accuracy": 0.9264354066985646,
+  "baseline_accuracy": 0.47787081339712917,
+  "improvement_vs_baseline": 0.298444976076555,
+  "train_size": 6685,
+  "test_size": 1672,
   "calibration_method": "sigmoid (Platt scaling)",
-  "training_date": "2025-12-03 20:31:57.840423"
+  "training_date": "2025-12-03 21:05:10.356501"
 }
