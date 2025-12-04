@@ -9,11 +9,44 @@ import json
 import argparse
 from pathlib import Path
 import config
+from head_to_head import get_h2h_matrix, calculate_h2h_features
 
 def load_historical_data():
     """Load historical rider data for feature lookup"""
     df = pd.read_csv(config.RESULTS_WITH_FEATURES, parse_dates=["race_date"])
     return df
+
+def load_uci_rankings():
+    """Load centralized UCI rankings (Nov 17, 2025)"""
+    rankings = {}
+
+    # Men Elite
+    men_path = config.CLEAN_DIR / "uci_rankings_men_elite.csv"
+    if men_path.exists():
+        men = pd.read_csv(men_path)
+        for _, row in men.iterrows():
+            name_norm = standardize_name(row["Rider"])
+            if name_norm:
+                rankings[name_norm] = {
+                    "rank": row["Rank"],
+                    "points": row["Points"],
+                    "category": "Men Elite"
+                }
+
+    # Women Elite
+    women_path = config.CLEAN_DIR / "uci_rankings_women_elite.csv"
+    if women_path.exists():
+        women = pd.read_csv(women_path)
+        for _, row in women.iterrows():
+            name_norm = standardize_name(row["Rider"])
+            if name_norm:
+                rankings[name_norm] = {
+                    "rank": row["Rank"],
+                    "points": row["Points"],
+                    "category": "Women Elite"
+                }
+
+    return rankings
 
 def load_models():
     """Load trained models"""
@@ -36,41 +69,127 @@ def normalize_name(name):
             .replace("á", "a").replace("à", "a").replace("ä", "a")
             .replace("ü", "u").replace("ï", "i").replace("ř", "r")
             .replace("ž", "z").replace("š", "s").replace("č", "c")
+            .replace("ý", "y").replace("í", "i").replace("ň", "n")
+            .replace("ě", "e").replace("ď", "d").replace("ť", "t")
     )
     return name
 
-def get_rider_features(rider_name, historical_data, category="Men Elite"):
-    """Get latest features for a rider from historical data"""
+def standardize_name(s):
+    """Standardize name to 'firstname lastname' format for consistent matching.
+    Handles:
+    - 'LASTNAME Firstname' -> 'firstname lastname'
+    - 'VAN ALPHEN Aniek' -> 'aniek van alphen' (multi-word last names)
+    - 'Firstname Lastname' -> 'firstname lastname'
+    """
+    if pd.isna(s):
+        return None
+    s = str(s).strip()
 
-    # Normalize name for matching
-    norm_name = normalize_name(rider_name)
-    historical_data["rider_name_norm"] = historical_data["rider_name"].apply(normalize_name)
+    # Remove diacritics for matching
+    normalized = normalize_name(s)
+    if normalized is None:
+        return None
 
-    # Try different name formats for matching
-    # "LASTNAME Firstname" -> "firstname lastname"
-    parts = norm_name.split()
+    parts = normalized.split()
+    orig_parts = s.split()
+
+    if len(parts) < 2:
+        return normalized
+
+    # Find where the uppercase last name ends and firstname begins
+    # E.g., "VAN ALPHEN Aniek" - find index of first non-uppercase word
+    first_lower_idx = None
+    for i, p in enumerate(orig_parts):
+        if not p.isupper():
+            first_lower_idx = i
+            break
+
+    if first_lower_idx is not None and first_lower_idx > 0:
+        # Found pattern like "VAN ALPHEN Aniek" or "LASTNAME Firstname"
+        first_name_parts = parts[first_lower_idx:]
+        last_name_parts = parts[:first_lower_idx]
+        return f"{' '.join(first_name_parts)} {' '.join(last_name_parts)}"
+    elif all(p.isupper() for p in orig_parts):
+        # All uppercase: "LASTNAME FIRSTNAME" -> assume first word is last name
+        return f"{parts[1]} {parts[0]}"
+
+    # Default: already in firstname lastname format
+    return normalized
+
+def get_rider_features(rider_name, historical_data, category="Men Elite", startlist_uci_rank=None, uci_rankings=None):
+    """Get latest features for a rider from historical data
+
+    Args:
+        rider_name: Rider name from startlist
+        historical_data: DataFrame with historical race results
+        category: Race category (e.g., "Men Elite")
+        startlist_uci_rank: UCI rank from startlist (fallback for new riders)
+        uci_rankings: Centralized UCI rankings lookup dict (primary source)
+    """
+
+    # Standardize name for matching (converts "LASTNAME Firstname" to "firstname lastname")
+    std_name = standardize_name(rider_name)
+    # Historical data should already have standardized names from update_results.py
+    # but normalize just in case
+    if "rider_name_norm" not in historical_data.columns:
+        historical_data["rider_name_norm"] = historical_data["rider_name"].apply(standardize_name)
+
+    # With standardized names, we can do simpler matching
+    # std_name is already in "firstname lastname" format
+    parts = std_name.split() if std_name else []
     if len(parts) >= 2:
-        # Try reversed: "firstname lastname"
-        reversed_name = f"{parts[-1]} {' '.join(parts[:-1])}"
+        # Extract first name and last name for partial matching
+        first_name = parts[0]
+        last_name = parts[-1]  # Last word is the last name
     else:
-        reversed_name = norm_name
+        first_name = std_name or ""
+        last_name = std_name or ""
 
-    # Find rider's most recent race (try both name orders)
+    # Find rider's most recent race
+    category_mask = historical_data["Category Name"].str.contains(category.split()[0], case=False, na=False)
+
+    # Exact match on standardized name
+    exact_match = (historical_data["rider_name_norm"] == std_name) & category_mask
+
+    # Partial match: both first name AND last name appear in historical name
+    # This handles names with middle names like "ceylin del carmen alvarado" matching "ceylin alvarado"
+    if first_name and last_name:
+        partial_match = (
+            historical_data["rider_name_norm"].str.contains(first_name, na=False, regex=False) &
+            historical_data["rider_name_norm"].str.contains(last_name, na=False, regex=False)
+        ) & category_mask
+    else:
+        partial_match = exact_match
+
     rider_history = historical_data[
-        (
-            (historical_data["rider_name_norm"] == norm_name) |
-            (historical_data["rider_name_norm"] == reversed_name)
-        ) &
-        (historical_data["Category Name"].str.contains(category.split()[0], case=False, na=False))
+        exact_match | partial_match
     ].sort_values("race_date", ascending=False)
 
     if len(rider_history) > 0:
         # Use most recent data
         latest = rider_history.iloc[0]
 
+        # Get UCI points normalized - prefer centralized rankings over historical data
+        max_uci_rank = 700
+        if uci_rankings and std_name in uci_rankings:
+            # Use current UCI ranking (more accurate than historical "Carried Points")
+            uci_rank = uci_rankings[std_name]["rank"]
+            uci_points_norm = min(uci_rank / max_uci_rank, 1.0)
+        elif startlist_uci_rank is not None and not pd.isna(startlist_uci_rank) and startlist_uci_rank > 0:
+            # Fallback to startlist UCI rank
+            uci_points_norm = min(startlist_uci_rank / max_uci_rank, 1.0)
+        else:
+            # Use historical data as last resort
+            uci_points_norm = latest["uci_points_normalized"]
+
+        # Cap races_so_far to avoid penalizing experienced riders
+        # The model incorrectly learned that more races = worse performance (fatigue artifact)
+        # Capping at 10 makes experienced riders equal to new riders (who also get 10)
+        races_so_far = min(latest["races_so_far"] + 1, 10)
+
         features = {
-            "uci_points_normalized": latest["uci_points_normalized"],
-            "races_so_far": latest["races_so_far"] + 1,  # +1 for this race
+            "uci_points_normalized": uci_points_norm,
+            "races_so_far": races_so_far,
             "avg_place_last3": latest["avg_place_last3"],
             "best_place_last5": latest["best_place_last5"],
             "last_place": latest["Place"],
@@ -92,30 +211,78 @@ def get_rider_features(rider_name, historical_data, category="Men Elite"):
         # v4 IMPROVEMENT: Use UCI-based inference instead of generic defaults
 
         # Try to get UCI points from historical data (even if no race history)
+        # Use same partial matching as above
+        if first_name and last_name:
+            uci_partial = (
+                historical_data["rider_name_norm"].str.contains(first_name, na=False, regex=False) &
+                historical_data["rider_name_norm"].str.contains(last_name, na=False, regex=False)
+            )
+        else:
+            uci_partial = pd.Series([False] * len(historical_data))
+
         uci_match = historical_data[
-            (historical_data["rider_name_norm"] == norm_name) |
-            (historical_data["rider_name_norm"] == reversed_name)
+            (historical_data["rider_name_norm"] == std_name) | uci_partial
         ]
 
-        if len(uci_match) > 0:
+        # Priority order for UCI data lookup:
+        # 1. Centralized UCI rankings (Nov 17, 2025) - use Points column for consistency
+        # 2. Startlist UCI rank column - convert rank to approximate points
+        # 3. Historical data UCI points - may be outdated
+        # 4. Default (weak rider)
+
+        # Normalization: Use UCI Points, normalized so that:
+        # - Lower normalized value = STRONGER rider (high points = good ranking)
+        # - Higher normalized value = WEAKER rider (low points = poor ranking)
+        #
+        # Historical data uses "Carried Points" (max ~750) where lower = better
+        # New UCI rankings use "Points" (max ~3500) where HIGHER = better
+        # We need to INVERT the new points to match historical convention
+        max_uci_points = 3500  # Max points in elite CX (Brand has 3280)
+        max_uci_rank = 700  # For fallback rank-to-points conversion
+
+        # 1. Check centralized UCI rankings first - USE POINTS (inverted)
+        if uci_rankings and std_name in uci_rankings:
+            uci_points = uci_rankings[std_name]["points"]
+            uci_rank = uci_rankings[std_name]["rank"]
+            # Invert: high points = strong rider = LOW normalized value
+            # Brand (3280 pts) → norm = 1 - (3280/3500) = 0.06 (strong)
+            # Folcarelli (132 pts) → norm = 1 - (132/3500) = 0.96 (weak)
+            # Wait - this doesn't match! Folcarelli rank 115 should be fairly strong
+            #
+            # Better approach: Use RANK directly since it's already ordered
+            # Rank 1 → norm ~0.0 (strong), Rank 120 → norm ~0.17 (still decent)
+            uci_points_norm = min(uci_rank / max_uci_rank, 1.0)
+            inference_source = f"UCI rankings (rank {int(uci_rank)}, {int(uci_points)} pts, norm={uci_points_norm:.3f})"
+        # 2. Try startlist UCI rank - convert to approximate normalized value
+        elif startlist_uci_rank is not None and not pd.isna(startlist_uci_rank) and startlist_uci_rank > 0:
+            # Rank 1 → norm ~0.0 (strong), Rank 500 → norm ~0.7 (weak)
+            uci_points_norm = min(startlist_uci_rank / max_uci_rank, 1.0)
+            inference_source = f"startlist UCI rank {int(startlist_uci_rank)} (norm={uci_points_norm:.3f})"
+        # 3. Check historical data
+        elif len(uci_match) > 0:
             uci_points_norm = uci_match.iloc[0]["uci_points_normalized"]
+            inference_source = f"historical UCI (norm={uci_points_norm:.3f})"
+        # 4. Default for unknown riders
         else:
-            uci_points_norm = 0.1  # Low default
+            uci_points_norm = 0.8  # High default = weak rider
+            inference_source = "generic default (weak)"
 
         # Infer expected place from UCI points (linear regression model)
-        if uci_points_norm > 0:
-            inferred_place = config.UCI_PLACE_INTERCEPT + config.UCI_PLACE_SLOPE * uci_points_norm
-            inferred_place = max(5, min(70, inferred_place))  # Bound to 5-70
-            inference_source = f"UCI-based (norm={uci_points_norm:.3f})"
-        else:
-            inferred_place = config.MEDIAN_PLACE_DEFAULT
-            inference_source = "generic default"
+        # Formula: place = 9.3 + 51.4 * uci_normalized
+        # uci_normalized=0.0 (rank 1) → place 9
+        # uci_normalized=0.5 (rank 350) → place 35
+        # uci_normalized=1.0 (rank 700) → place 60
+        inferred_place = config.UCI_PLACE_INTERCEPT + config.UCI_PLACE_SLOPE * uci_points_norm
+        inferred_place = max(5, min(70, inferred_place))  # Bound to 5-70
 
         print(f"  ⚠️  {rider_name}: No history found, using {inference_source} → expected place ~{inferred_place:.0f}")
 
+        # For new riders, use neutral values that don't trigger training data artifacts
+        # - races_so_far=0 in training data means "first race of season" (often good performance)
+        # - For truly unknown riders, use median value (~10) to avoid this bias
         features = {
             "uci_points_normalized": uci_points_norm,
-            "races_so_far": 0,
+            "races_so_far": 10,  # Neutral value (was 0, which boosted predictions incorrectly)
             "avg_place_last3": inferred_place,  # v4: UCI-based instead of generic
             "best_place_last5": inferred_place,  # v4: UCI-based instead of generic
             "last_place": inferred_place,        # v4: UCI-based instead of generic
@@ -152,9 +319,11 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
     print("\nLoading models and historical data...")
     model_top10, model_top3, metadata = load_models()
     historical_data = load_historical_data()
+    uci_rankings = load_uci_rankings()
 
     print(f"✓ Model loaded (90.0% Top-10 accuracy on Tabor)")
     print(f"✓ Historical data: {len(historical_data)} observations")
+    print(f"✓ UCI rankings loaded: {len(uci_rankings)} riders (Nov 17, 2025)")
     print(f"✓ Confidence threshold: {confidence_threshold:.0%} (improved precision)")
     print(f"✓ DNS filter: {'Enabled' if enable_dns_filter else 'Disabled'}")
 
@@ -162,6 +331,19 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
     print(f"\nLoading startlist: {startlist_path}")
     startlist = pd.read_csv(startlist_path)
     print(f"✓ Found {len(startlist)} riders")
+
+    # Build H2H matrix and get normalized field names
+    print("\nBuilding head-to-head matrix...")
+    h2h_matrix = get_h2h_matrix()
+
+    # Build normalized field list for H2H calculations
+    field_names_norm = []
+    for idx, row in startlist.iterrows():
+        rider_name = row.get("rider_name", row.get("Naam", row.get("Name")))
+        std_name = standardize_name(rider_name)
+        if std_name:
+            field_names_norm.append(std_name)
+    print(f"✓ H2H matrix ready ({len(field_names_norm)} riders in field)")
 
     # Generate predictions for each rider
     predictions = []
@@ -172,8 +354,20 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
     for idx, row in startlist.iterrows():
         rider_name = row.get("rider_name", row.get("Naam", row.get("Name")))
 
+        # Get UCI rank from startlist (if available)
+        uci_rank = row.get("UCI Rank", row.get("UCI", row.get("uci_rank", None)))
+        if uci_rank is not None:
+            uci_rank = pd.to_numeric(uci_rank, errors='coerce')
+
         # Get features
-        features, status = get_rider_features(rider_name, historical_data, category)
+        features, status = get_rider_features(rider_name, historical_data, category, startlist_uci_rank=uci_rank, uci_rankings=uci_rankings)
+
+        # Calculate head-to-head score against this field
+        std_name = standardize_name(rider_name)
+        h2h_features = calculate_h2h_features(std_name, field_names_norm)
+
+        # Add H2H to model features
+        features["h2h_field_score"] = h2h_features['h2h_field_score']
 
         # Prepare feature vector
         X = pd.DataFrame([features])
@@ -221,6 +415,9 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
             "Rider": rider_name,
             "Top-10 Probability": top10_prob,
             "Top-3 Probability": top3_prob,
+            "H2H Field Score": h2h_features['h2h_field_score'],
+            "H2H Confidence": h2h_features['h2h_confidence'],
+            "H2H Known Opponents": h2h_features['h2h_known_opponents'],
             "Predicted Finish": predicted_finish,
             "Status": status,
             "DNS Risk": dns_risk,
@@ -229,14 +426,15 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
             "Career Top-10 Rate": features.get("top10_rate_career", 0)
         })
 
-        # Print status
+        # Print status with H2H info
         if dns_risk:
             confidence = "⚠️  DNS?"
         else:
             confidence = "🔥 HIGH" if top10_prob > 0.7 else "⚠️  MED" if top10_prob > 0.4 else "   LOW"
 
         dns_marker = " [DNS RISK]" if dns_risk else ""
-        print(f"  {confidence}  {rider_name:30s}  Top-10: {top10_prob:5.1%}  |  Podium: {top3_prob:5.1%}{dns_marker}")
+        h2h_str = f"H2H: {h2h_features['h2h_field_score']*100:4.0f}%" if h2h_features['h2h_confidence'] > 0 else "H2H: N/A"
+        print(f"  {confidence}  {rider_name:30s}  Top-10: {top10_prob:5.1%}  |  Podium: {top3_prob:5.1%}  |  {h2h_str}{dns_marker}")
 
     # Sort by Top-10 probability
     df_predictions = pd.DataFrame(predictions).sort_values("Top-10 Probability", ascending=False)
@@ -254,7 +452,9 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
 
     for idx, row in top10_predictions.iterrows():
         podium_icon = "🥇" if row["Top-3 Probability"] > 0.5 else "  "
-        print(f"{podium_icon} {row['Rider']:30s}  {row['Top-10 Probability']:5.1%} chance")
+        h2h_pct = row['H2H Field Score'] * 100 if row['H2H Confidence'] > 0 else 0
+        h2h_str = f"(H2H: {h2h_pct:3.0f}%)" if row['H2H Confidence'] > 0.3 else "(H2H: N/A)"
+        print(f"{podium_icon} {row['Rider']:30s}  {row['Top-10 Probability']:5.1%} chance  {h2h_str}")
 
     print(f"\nTotal predicted Top-10: {len(top10_predictions)} riders")
     print(f"(Using {confidence_threshold:.0%} confidence threshold)")
@@ -297,9 +497,20 @@ def predict_race(startlist_path, category="Men Elite", output_path=None, confide
     print(f"DNS risks flagged: {len(dns_risks)}")
     print(f"Riders with history: {len(df_predictions[df_predictions['Status'] == 'found'])}")
     print(f"New riders: {len(df_predictions[df_predictions['Status'] == 'new_rider'])}")
+
+    # H2H stats
+    h2h_coverage = df_predictions[df_predictions['H2H Confidence'] > 0.3]
+    print(f"\nHead-to-Head Analysis:")
+    print(f"  • Riders with H2H data: {len(h2h_coverage)}/{len(df_predictions)}")
+    if len(h2h_coverage) > 0:
+        avg_h2h = h2h_coverage['H2H Field Score'].mean() * 100
+        top_h2h = h2h_coverage.nlargest(3, 'H2H Field Score')
+        print(f"  • Top H2H vs field: {', '.join(top_h2h['Rider'].head(3))}")
+
     print(f"\nImprovements vs Tabor:")
     print(f"  • Confidence threshold: 50% → {confidence_threshold:.0%} (reduce false positives)")
     print(f"  • DNS filtering: {'Enabled' if enable_dns_filter else 'Disabled'}")
+    print(f"  • Head-to-head analysis: Enabled (field-adjusted win rates)")
     print(f"  • Expected precision: ~60% (vs 42% at Tabor)")
 
     print("\n" + "=" * 70)

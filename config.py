@@ -36,7 +36,8 @@ NUMERIC_FEATURES = [
     "top10_rate_career",
     "series_appearances",
     "is_elite",
-    "is_women"
+    "is_women",
+    "h2h_field_score"  # Head-to-head win rate against race field
 ]
 
 CATEGORICAL_FEATURES = [
@@ -91,7 +92,8 @@ FILL_VALUES = {
     "top10_rate_career": 0,
     "series_appearances": 0,
     "is_elite": 0,
-    "is_women": 0
+    "is_women": 0,
+    "h2h_field_score": 0.5  # Neutral H2H score for unknown matchups
 }
 
 # Categories
