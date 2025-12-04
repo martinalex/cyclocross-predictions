@@ -13,6 +13,8 @@ import sys
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
 import config
+from head_to_head import get_h2h_matrix, calculate_h2h_features
+from predict_race import standardize_name
 
 st.set_page_config(
     page_title="VeloPredict: Cyclocross Predictions",
@@ -49,8 +51,8 @@ except Exception as e:
 
 # Header
 st.title("🚴 VeloPredict: Cyclocross Race Predictions")
-st.markdown("**AI-powered predictions with 90% Top-10 accuracy (validated at Tabor UCI World Cup)**")
-st.caption("Version: v4-calibrated | Model: Random Forest + Platt Scaling")
+st.markdown("**AI-powered predictions with H2H analysis - 77% Top-10 accuracy**")
+st.caption("Version: v5 (H2H) | Model: Random Forest + Platt Scaling | H2H = #1 Feature (21.4%)")
 
 if not model_loaded:
     st.error(f"❌ Model not found. Please run `train_model_v2.py` first.")
@@ -104,6 +106,11 @@ with tab1:
 
     # Get unique riders who have raced recently in selected category
     # Note: Lower UCI points = better ranking for elite riders
+    def get_last_non_empty(series):
+        """Get the last non-empty value from a series"""
+        non_empty = series[series.notna() & (series != "")]
+        return non_empty.iloc[-1] if len(non_empty) > 0 else ""
+
     recent_riders = (
         historical_data[
             (historical_data["race_date"] > "2024-11-01") &
@@ -115,7 +122,7 @@ with tab1:
             "Carried Points": "last",
             "team_tier": "last",
             "top10_rate_career": "last",
-            "Team Name": "last"
+            "Team Name": get_last_non_empty
         })
         .sort_values("Carried Points", ascending=True)  # Lower points = better riders
         .head(50)
@@ -129,17 +136,32 @@ with tab1:
     )
 
     if selected_riders:
+        # Build normalized field list for H2H calculations
+        field_names_norm = [standardize_name(r) for r in selected_riders if standardize_name(r)]
+
         # Get latest features for selected riders in this category
         predictions = []
 
         for rider in selected_riders:
-            rider_data = historical_data[
+            rider_history = historical_data[
                 (historical_data["rider_name"] == rider) &
                 (historical_data["Category Name"] == category)
-            ].iloc[-1]
+            ]
+            rider_data = rider_history.iloc[-1]
 
-            # Prepare features
-            X = pd.DataFrame([rider_data[config.NUMERIC_FEATURES + config.CATEGORICAL_FEATURES]])
+            # Get last non-empty team name
+            team_names = rider_history["Team Name"]
+            non_empty_teams = team_names[team_names.notna() & (team_names != "")]
+            team_name = non_empty_teams.iloc[-1] if len(non_empty_teams) > 0 else "No Team Data"
+
+            # Calculate H2H score against this field
+            std_name = standardize_name(rider)
+            h2h_features = calculate_h2h_features(std_name, field_names_norm)
+
+            # Prepare features - include H2H
+            feature_cols = [f for f in config.NUMERIC_FEATURES if f != 'h2h_field_score'] + config.CATEGORICAL_FEATURES
+            X = pd.DataFrame([rider_data[feature_cols]])
+            X['h2h_field_score'] = h2h_features['h2h_field_score']
             X = pd.get_dummies(X, columns=config.CATEGORICAL_FEATURES, drop_first=True)
 
             # Align with training features
@@ -155,12 +177,17 @@ with tab1:
             top10_prob = model_top10.predict_proba(X)[0][1]
             top3_prob = model_top3.predict_proba(X)[0][1]
 
+            # Format H2H display
+            h2h_display = f"{h2h_features['h2h_field_score']*100:.0f}%" if h2h_features['h2h_confidence'] > 0.3 else "N/A"
+
             predictions.append({
                 "Rider": rider,
                 "Top-10 Probability": top10_prob,
                 "Top-3 Probability": top3_prob,
+                "H2H vs Field": h2h_display,
+                "H2H Score": h2h_features['h2h_field_score'],
                 "UCI Points": rider_data["Carried Points"],
-                "Team": rider_data["Team Name"],
+                "Team": team_name,
                 "Recent Form (avg last 3)": rider_data["avg_place_last3"]
             })
 
@@ -178,7 +205,11 @@ with tab1:
             else:
                 return 'background-color: #f8d7da'
 
-        styled_df = df_pred.style.applymap(
+        # Display columns (excluding raw H2H Score used for sorting)
+        display_cols = ["Rider", "Top-10 Probability", "Top-3 Probability", "H2H vs Field", "UCI Points", "Team", "Recent Form (avg last 3)"]
+        df_display = df_pred[display_cols]
+
+        styled_df = df_display.style.applymap(
             color_prob,
             subset=["Top-10 Probability", "Top-3 Probability"]
         ).format({
@@ -192,14 +223,26 @@ with tab1:
 
         # Summary stats
         st.markdown("### 📊 Quick Stats")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
         likely_top10 = (df_pred["Top-10 Probability"] > 0.6).sum()
         likely_podium = (df_pred["Top-3 Probability"] > 0.5).sum()
+        h2h_coverage = (df_pred["H2H vs Field"] != "N/A").sum()
 
         col1.metric("Likely Top-10", f"{likely_top10} riders")
         col2.metric("Likely Podium", f"{likely_podium} riders")
-        col3.metric("Avg Top-10 Probability", f"{df_pred['Top-10 Probability'].mean():.1%}")
+        col3.metric("Avg Top-10 Prob", f"{df_pred['Top-10 Probability'].mean():.1%}")
+        col4.metric("H2H Coverage", f"{h2h_coverage}/{len(df_pred)}")
+
+        # Show top H2H performers
+        st.markdown("### 🥊 Head-to-Head Leaders")
+        st.caption("Riders with best historical win rate against this specific field")
+        top_h2h = df_pred[df_pred["H2H vs Field"] != "N/A"].nlargest(5, "H2H Score")
+        if len(top_h2h) > 0:
+            for _, row in top_h2h.iterrows():
+                st.write(f"**{row['Rider']}** - {row['H2H vs Field']} win rate vs field")
+        else:
+            st.info("No H2H data available for selected riders")
 
     else:
         st.info("Select riders above to see predictions")
@@ -210,15 +253,16 @@ with tab2:
     st.markdown("### 🎯 Feature Importance")
     st.markdown("What the model considers most important:")
 
-    # Feature importance from metadata would go here
     st.markdown("""
-    **Top 5 Most Important Features:**
-    1. **Top-10 Career Rate** (19.4%) - Historical success in scoring positions
-    2. **Best Place (Last 5)** (16.0%) - Recent peak performance
-    3. **Average Place (Last 3)** (13.9%) - Current form trajectory
-    4. **UCI Points** (11.3%) - Rider pedigree and ranking
-    5. **Last Place** (10.9%) - Momentum from most recent race
+    **Top 5 Most Important Features (v5 with H2H):**
+    1. **🥊 H2H Field Score** (21.4%) - Historical win rate vs specific opponents
+    2. **Average Place (Last 3)** (13.0%) - Current form trajectory
+    3. **Top-10 Career Rate** (12.9%) - Historical success in scoring positions
+    4. **Best Place (Last 5)** (12.7%) - Recent peak performance
+    5. **Last Place** (9.4%) - Momentum from most recent race
     """)
+
+    st.info("💡 **H2H is now the #1 feature!** The model weighs head-to-head history against the actual race field more than any other factor.")
 
     st.markdown("### 📈 Performance by Category")
 
@@ -251,24 +295,28 @@ with tab3:
     VeloPredict uses machine learning to predict which riders will finish in the **Top-10**
     (scoring positions) at cyclocross races.
 
-    **Accuracy:** 80.2% (training), 90% (Tabor live validation) - 41% better than baseline
+    **Accuracy:** 76.9% Top-10 accuracy (+29.4% vs baseline)
+    **Validation:** Flamanville H2H correlation r=0.773 (men), r=0.867 (women)
 
     ### 🧠 How It Works
 
     **Algorithm:** Random Forest (300 trees) + Platt Scaling calibration
 
     The model analyzes:
-    - **Rider pedigree:** UCI points, team quality
+    - **🥊 Head-to-Head** (21.4%): Win rate against specific opponents in the field
     - **Current form:** Recent race results, days since last race
     - **Historical performance:** Career Top-10 rate, best recent finishes
+    - **Rider pedigree:** UCI points, team quality
     - **Race context:** Category (Elite/U23/Junior), gender
 
-    **Key Improvements (v4):**
-    - ✅ UCI-based inference for new riders (linear regression model)
-    - ✅ Probability calibration (Platt scaling) for better precision
-    - ✅ DNS risk filtering (flags riders unlikely to start)
+    **Key Improvements (v5 - H2H):**
+    - ✅ **Head-to-Head feature** - #1 most important feature!
+    - ✅ Field-adjusted predictions based on actual startlist opponents
+    - ✅ UCI-based inference for new riders
+    - ✅ Probability calibration (Platt scaling)
+    - ✅ DNS risk filtering
 
-    **Training data:** 45 races from 2024-25 season (7,708 rider-race observations)
+    **Training data:** 49 races from 2024-25 season (8,188 rider-race observations)
 
     ### 📊 Use Cases
 
@@ -317,7 +365,8 @@ with tab3:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #666;'>"
-    "VeloPredict v4-calibrated | 90% Top-10 Accuracy (Tabor validation) | "
+    "VeloPredict v5 (H2H) | 77% Top-10 Accuracy | "
+    "H2H = #1 Feature (21.4%) | "
     "Random Forest + Platt Scaling | "
     "For educational and strategic planning purposes"
     "</div>",
