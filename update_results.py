@@ -12,7 +12,7 @@ CLEAN_DIR = DATA_DIR / "clean"
 RESULTS_DIR = DATA_DIR / "results"
 
 print("=" * 60)
-print("UPDATING RESULTS WITH TABOR & FLAMANVILLE")
+print("UPDATING RESULTS WITH TABOR, FLAMANVILLE & SARDINIA")
 print("=" * 60)
 
 # Load existing results
@@ -144,8 +144,46 @@ flam_women = parse_flamanville_results(
 )
 print(f"Parsed {len(flam_women)} riders")
 
+# Parse Sardinia results (Dec 7, 2025)
+def parse_sardinia_results(filepath, category):
+    """Parse Sardinia CSV - format: Position,Name,Nationality,YOB,Time"""
+    df = pd.read_csv(filepath)
+    return pd.DataFrame({
+        'Category Name': category,
+        'Place': pd.to_numeric(df['Position'], errors='coerce'),
+        'rider_name': df['Name'],
+        'NAT': df['Nationality'],
+        'race_date': pd.Timestamp('2025-12-07'),
+        'race_id': '20251207_uci-world-cup_sardinia_sardinia-ita',
+        'series_name': 'UCI-World-Cup',
+        'race_name': 'Sardinia',
+        'race_location': 'Sardinia-ITA'
+    })
+
+print("\n--- Parsing Sardinia Men Elite ---")
+sardinia_men_file = RESULTS_DIR / "Results__UCI-World-Cup__Sardinia__Men-Elite__2025-12-07__Sardinia-ITALY.csv"
+if sardinia_men_file.exists():
+    sardinia_men = parse_sardinia_results(sardinia_men_file, 'Men Elite')
+    sardinia_men = sardinia_men.dropna(subset=['Place'])
+    print(f"Parsed {len(sardinia_men)} riders")
+    print(sardinia_men[['Place', 'rider_name']].head(10))
+else:
+    sardinia_men = pd.DataFrame()
+    print("File not found, skipping")
+
+print("\n--- Parsing Sardinia Women Elite ---")
+sardinia_women_file = RESULTS_DIR / "Results__UCI-World-Cup__Sardinia__Women-Elite__2025-12-07__Sardinia-ITALY.csv"
+if sardinia_women_file.exists():
+    sardinia_women = parse_sardinia_results(sardinia_women_file, 'Women Elite')
+    sardinia_women = sardinia_women.dropna(subset=['Place'])
+    print(f"Parsed {len(sardinia_women)} riders")
+    print(sardinia_women[['Place', 'rider_name']].head(10))
+else:
+    sardinia_women = pd.DataFrame()
+    print("File not found, skipping")
+
 # Combine new results
-new_results = pd.concat([tabor_men, tabor_women, flam_men, flam_women], ignore_index=True)
+new_results = pd.concat([tabor_men, tabor_women, flam_men, flam_women, sardinia_men, sardinia_women], ignore_index=True)
 print(f"\nTotal new results: {len(new_results)}")
 
 # Add missing columns with defaults

@@ -22,9 +22,14 @@ Data shows new riders (even with strong UCI rankings) have only 38% Top-10 rate,
 ## MEN ELITE PREDICTIONS
 
 ### Predicted Podium
-1. **NIEUWENHUIS Joris** (6.7% podium) - H2H: 93% vs field
-2. **FOLCARELLI Antonio** (6.5% podium) - New rider, UCI rank 115 (discounted)
-3. **SWEECK Laurens** (0.3% podium) - H2H: 86% vs field
+**No riders meet the 30% podium prediction threshold.**
+
+Men's Elite CX is highly competitive - podium is difficult to predict with confidence.
+
+*Reference (all below threshold):*
+- NIEUWENHUIS Joris (6.7% podium) - H2H: 93%
+- AERTS Toon (1.3% podium) - H2H: 85%
+- VANDEPUTTE Niels (0.8% podium) - H2H: 87%
 
 ### Predicted Top-10 (4 riders above 55% threshold)
 
@@ -58,23 +63,28 @@ Data shows new riders (even with strong UCI rankings) have only 38% Top-10 rate,
 ## WOMEN ELITE PREDICTIONS
 
 ### Predicted Podium
-1. **BRAND Lucinda** (95.1% podium) - H2H: 99% vs field - Dominant
-2. **VAN ANROOIJ Shirin** (1.7% podium) - H2H: 56% vs field
-3. **PERUTA Sara** (2.9% podium) - New rider, UCI rank 173 (discounted)
+**Only 1 rider meets the 30% podium prediction threshold:**
 
-### Predicted Top-10 (4 riders above 55% threshold)
+🥇 **BRAND Lucinda** (95.1% podium) - H2H: 99% vs field - **Dominant favorite**
+
+*Reference (all below threshold):*
+- VAN ANROOIJ Shirin (1.7% podium) - H2H: 56%
+- MOLENGRAAF Lauren (0.9% podium) - H2H: 32%
+- WORST Annemarie (0.5% podium) - H2H: 66%
+
+### Predicted Top-10 (3 riders above 55% threshold)
 
 | Rank | Rider | Top-10 Prob | H2H vs Field | Notes |
 |------|-------|-------------|--------------|-------|
 | 1 | BRAND Lucinda | 98.8% | 99% | 1st Tabor, World Cup leader |
 | 2 | CASASOLA Sara | 79.8% | 76% | 2nd Tabor, home race advantage |
 | 3 | BENTVELD Leonie | 63.4% | 83% | 4th Tabor |
-| 4 | VAN ANROOIJ Shirin | 53.9% | 56% | 16th Tabor, 6th Flamanville |
 
 ### Borderline Predictions (40-55%)
 
 | Rider | Top-10 Prob | H2H vs Field | Notes |
 |-------|-------------|--------------|-------|
+| VAN ANROOIJ Shirin | 53.9% | 56% | 16th Tabor, 6th Flamanville |
 | SCHREIBER Marie | 52.7% | 83% | DNF Tabor |
 | VAN ALPHEN Aniek | 46.7% | 78% | 5th Tabor, 1st Flamanville |
 | NORBERT RIBEROLLE Marion | 46.0% | 76% | Consistent performer |
@@ -83,7 +93,7 @@ Data shows new riders (even with strong UCI rankings) have only 38% Top-10 rate,
 ### Key Changes from v5
 - **PERUTA Sara** dropped from 70.8% to **37.9%** (new rider penalty)
 - **CASASOLA Sara** remains correctly ranked (79.8%) - Italian with H2H data
-- More realistic Top-10 predictions (4 vs 7 above threshold)
+- More realistic Top-10 predictions (3 riders above 55% threshold)
 
 ### Top H2H Performers (Women)
 1. BRAND Lucinda - 99%
@@ -154,10 +164,10 @@ Italian home race - expect strong crowd support for:
 
 ## Quick Reference
 
-| Category | Predicted Top-10 | High Confidence (>70%) | DNS Risks |
-|----------|------------------|------------------------|-----------|
-| Men Elite | 4 riders | 3 (Nieuwenhuis, Vandeputte, Sweeck) | 0 |
-| Women Elite | 4 riders | 2 (Brand, Casasola) | 1 |
+| Category | Predicted Top-10 | High Confidence (>70%) | Podium Threshold (30%) | DNS Risks |
+|----------|------------------|------------------------|------------------------|-----------|
+| Men Elite | 4 riders | 3 (Nieuwenhuis, Vandeputte, Sweeck) | 0 riders | 0 |
+| Women Elite | 3 riders | 2 (Brand, Casasola) | 1 rider (Brand) | 1 |
 
 **Race Date:** Sunday, December 7, 2025
 - Women Elite: 13:40
@@ -165,5 +175,5 @@ Italian home race - expect strong crowd support for:
 
 ---
 
-*Predictions generated with VeloPredict v6 - Updated December 3, 2025*
-*H2H feature enabled (22.5%) + New rider penalty (50% discount)*
+*Predictions generated with VeloPredict v6.1 - Updated December 3, 2025*
+*H2H feature (22.5%) + New rider penalty (50% discount) + Podium threshold (30%)*

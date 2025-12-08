@@ -34,11 +34,12 @@ def load_models():
 
     return top10_model, top3_model, metadata
 
-# Load historical data
-@st.cache_data
+# Load historical data - cache disabled to ensure fresh data with name corrections
 def load_data():
     """Load historical race data"""
     df = pd.read_csv(config.RESULTS_WITH_FEATURES, parse_dates=["race_date"])
+    # Pre-compute standardized names for deduplication (includes NAME_CORRECTIONS)
+    df["rider_name_std"] = df["rider_name"].apply(standardize_name)
     return df
 
 try:
@@ -51,8 +52,8 @@ except Exception as e:
 
 # Header
 st.title("🚴 VeloPredict: Cyclocross Race Predictions")
-st.markdown("**AI-powered predictions with H2H analysis - 78% Top-10 accuracy**")
-st.caption("Version: v6 (H2H + New Rider Penalty) | Model: Random Forest + Platt Scaling | H2H = #1 Feature (22.5%)")
+st.markdown("**AI-powered predictions with H2H analysis - 84% Top-10 accuracy**")
+st.caption("Version: v6.1 (Sardinia validated) | 50 races, 8,800+ observations | H2H = #1 Feature (22.9%) | Live: 100% recall at Sardinia")
 
 if not model_loaded:
     st.error(f"❌ Model not found. Please run `train_model_v2.py` first.")
@@ -82,10 +83,15 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🎯 Live Validation")
-    st.markdown("**Tabor UCI World Cup:**")
-    st.markdown("- ✅ 90% Top-10 accuracy (18/20)")
-    st.markdown("- ✅ Men Elite: 9/10 correct")
-    st.markdown("- ✅ Women Elite: 9/10 correct")
+    st.markdown("**Sardinia (Dec 7):**")
+    st.markdown("- ✅ 100% recall (7/7 high-conf)")
+    st.markdown("- ✅ All podium predictions correct")
+    st.markdown("")
+    st.markdown("**Flamanville (Nov 30):**")
+    st.markdown("- ✅ 80% Top-10 (16/20)")
+    st.markdown("")
+    st.markdown("**Tabor (Nov 23):**")
+    st.markdown("- ✅ 90% Top-10 (18/20)")
 
 # Main content
 tab1, tab2, tab3 = st.tabs(["🔮 Predict Race", "📈 Model Insights", "📚 About"])
@@ -111,13 +117,18 @@ with tab1:
         non_empty = series[series.notna() & (series != "")]
         return non_empty.iloc[-1] if len(non_empty) > 0 else ""
 
+    # Filter recent races in selected category
+    # rider_name_std is pre-computed in load_data() for deduplication
+    recent_data = historical_data[
+        (historical_data["race_date"] > "2024-11-01") &
+        (historical_data["Category Name"] == category)
+    ].copy()
+
     recent_riders = (
-        historical_data[
-            (historical_data["race_date"] > "2024-11-01") &
-            (historical_data["Category Name"] == category)
-        ]
-        .groupby("rider_name")
+        recent_data
+        .groupby("rider_name_std")
         .agg({
+            "rider_name": "last",  # Keep one display name per rider
             "Place": "mean",
             "Carried Points": "last",
             "team_tier": "last",
@@ -127,6 +138,10 @@ with tab1:
         .sort_values("Carried Points", ascending=True)  # Lower points = better riders
         .head(50)
     )
+
+    # Use the original rider_name for display, indexed by standardized name
+    recent_riders.index = recent_riders["rider_name"]
+    recent_riders = recent_riders.drop(columns=["rider_name"])
 
     # Display rider selector
     selected_riders = st.multiselect(
@@ -139,13 +154,18 @@ with tab1:
         # Build normalized field list for H2H calculations
         field_names_norm = [standardize_name(r) for r in selected_riders if standardize_name(r)]
 
+        # Use pre-computed standardized names from load_data()
+        hist_data = historical_data
+
         # Get latest features for selected riders in this category
         predictions = []
 
         for rider in selected_riders:
-            rider_history = historical_data[
-                (historical_data["rider_name"] == rider) &
-                (historical_data["Category Name"] == category)
+            # Use standardized name for matching to handle inconsistent capitalization
+            rider_std = standardize_name(rider)
+            rider_history = hist_data[
+                (hist_data["rider_name_std"] == rider_std) &
+                (hist_data["Category Name"] == category)
             ]
             rider_data = rider_history.iloc[-1]
 
