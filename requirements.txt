@@ -14,6 +14,7 @@ chardet>=5.0.0
 # Web demo (Streamlit)
 streamlit>=1.28.0
 plotly>=5.14.0
+matplotlib>=3.7.0
 
 # Development (optional)
 # jupyter==1.0.0
@@ -23,6 +24,9 @@ plotly>=5.14.0
 fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
 pydantic>=2.0.0
+
+# LLM integration (narrative generation)
+anthropic>=0.39.0
 
 # Future: Wearables integrations (VeloIntel phase)
 # stravalib==1.4

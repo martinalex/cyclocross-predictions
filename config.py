@@ -107,6 +107,29 @@ JUNIOR_CATEGORIES = ["Men Junior", "Women Junior"]
 TARGET_TOP10_ACCURACY = 0.80  # 80% accuracy goal
 TARGET_TOP3_ACCURACY = 0.70  # 70% podium accuracy goal
 
+# ============================================================
+# Inference thresholds and discounts
+# These control prediction behavior at inference time
+# ============================================================
+
+# Confidence threshold: minimum probability to predict Top-10
+# Higher threshold = fewer predictions, higher precision
+# Lower threshold = more predictions, higher recall
+CONFIDENCE_THRESHOLD = 0.55  # v4: was 0.50, increased to reduce false positives
+
+# Podium threshold: minimum probability to include in podium predictions
+PODIUM_THRESHOLD = 0.30  # Only show podium candidates with >= 30% chance
+
+# New rider discount: reduce predictions for riders with no history
+# Data shows new riders with UCI norm ≤0.2 have 38% top-10 rate, not 80%+
+NEW_RIDER_DISCOUNT = 0.5  # Multiply probabilities by this factor (50% reduction)
+
+# DNS (Did Not Start) filter thresholds
+DNS_DAYS_THRESHOLD = 21  # Flag riders who haven't raced in 21+ days
+DNS_MIN_RACES = 2  # Flag known riders with fewer than 2 races this season
+
+# ============================================================
+
 # Streamlit app settings
 APP_TITLE = "VeloPredict: Cyclocross Race Predictions"
 APP_DESCRIPTION = "AI-powered predictions for cyclocross races with 80%+ Top-10 accuracy"
