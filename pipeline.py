@@ -140,6 +140,10 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
 
     high_conf = predictions_df[predictions_df["Top-10 Probability"] >= 0.70]
 
+    # Calculate max rider name length for alignment (including ** markers)
+    max_name_len = max(len(row['Rider']) + (4 if row['Top-10 Probability'] >= 0.70 else 0)
+                       for _, row in top10_preds.iterrows()) if len(top10_preds) > 0 else 20
+
     lines.extend([
         f"## {category}",
         f"",
@@ -147,19 +151,23 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
         f"",
         f"### Predicted Top-10",
         f"",
-        f"| # | Rider | Top-10 % | Podium % | H2H | Form |",
-        f"|---|-------|----------|----------|-----|------|",
+        f"| #  | {'Rider':<{max_name_len}} | Top-10 % | Podium % | H2H  | Form |",
+        f"|----|-{'-'*max_name_len}-|----------|----------|------|------|",
     ])
 
     for i, (_, row) in enumerate(top10_preds.iterrows(), 1):
-        h2h = f"{row['H2H Field Score']*100:.0f}%" if row['H2H Confidence'] > 0.3 else "N/A"
-        form = f"{row['Recent Form']:.1f}" if pd.notna(row['Recent Form']) else "N/A"
-        conf_marker = "**" if row['Top-10 Probability'] >= 0.70 else ""
+        h2h = f"{row['H2H Field Score']*100:3.0f}%" if row['H2H Confidence'] > 0.3 else "N/A "
+        form = f"{row['Recent Form']:4.1f}" if pd.notna(row['Recent Form']) else "N/A "
+        top10_pct = f"{row['Top-10 Probability']*100:5.1f}%"
+        top3_pct = f"{row['Top-3 Probability']*100:5.1f}%"
+
+        if row['Top-10 Probability'] >= 0.70:
+            rider_name = f"**{row['Rider']}**"
+        else:
+            rider_name = row['Rider']
+
         lines.append(
-            f"| {i} | {conf_marker}{row['Rider']}{conf_marker} | "
-            f"{row['Top-10 Probability']*100:.1f}% | "
-            f"{row['Top-3 Probability']*100:.1f}% | "
-            f"{h2h} | {form} |"
+            f"| {i:2d} | {rider_name:<{max_name_len}} | {top10_pct:>8} | {top3_pct:>8} | {h2h:>4} | {form:>4} |"
         )
 
     lines.extend([
