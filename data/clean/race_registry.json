@@ -1,0 +1,110 @@
+{
+  "races": [
+    {
+      "id": "tabor_2025-11-23",
+      "name": "Tabor",
+      "date": "2025-11-23",
+      "series": "UCI World Cup",
+      "version": "v1",
+      "threshold": 0.5,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_tabor_men_elite.csv",
+        "Women Elite": "data/clean/predictions_tabor_women_elite.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-World-Cup__Tabor__Men-Elite__2025-11-23__Tabor-CZECHIA.csv",
+        "Women Elite": "data/results/Results__UCI-World-Cup__Tabor__Women-Elite__2025-11-23__Tabor-CZECHIA.csv"
+      }
+    },
+    {
+      "id": "flamanville_2025-11-30",
+      "name": "Flamanville",
+      "date": "2025-11-30",
+      "series": "UCI World Cup",
+      "version": "v2",
+      "threshold": 0.5,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_flamanville_men_elite.csv",
+        "Women Elite": "data/clean/predictions_flamanville_women_elite.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-World-Cup__Flamanville__Men-Elite__2025-11-30__Flamanville-FRANCE.csv",
+        "Women Elite": "data/results/Results__UCI-World-Cup__Flamanville__Women-Elite__2025-11-30__Flamanville-FRANCE.csv"
+      }
+    },
+    {
+      "id": "sardinia_2025-12-07",
+      "name": "Sardinia",
+      "date": "2025-12-07",
+      "series": "UCI World Cup",
+      "version": "v6",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_20251203_2105.csv",
+        "Women Elite": "data/clean/predictions_20251203_2032.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-World-Cup__Sardinia__Men-Elite__2025-12-07__Sardinia-ITALY.csv",
+        "Women Elite": "data/results/Results__UCI-World-Cup__Sardinia__Women-Elite__2025-12-07__Sardinia-ITALY.csv"
+      }
+    },
+    {
+      "id": "namur_2025-12-14",
+      "name": "Namur",
+      "date": "2025-12-14",
+      "series": "UCI World Cup",
+      "version": "v6",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_namur_men_elite_20251210_1510.csv",
+        "Women Elite": "data/clean/predictions_namur_women_elite_20251210_1510.csv"
+      },
+      "results": {}
+    }
+  ],
+  "model_versions": [
+    {
+      "version": "v1",
+      "accuracy": 80.2,
+      "auc": null,
+      "observations": 7724,
+      "innovation": "Baseline RF"
+    },
+    {
+      "version": "v2",
+      "accuracy": 80.2,
+      "auc": null,
+      "observations": 7724,
+      "innovation": "+Threshold"
+    },
+    {
+      "version": "v3",
+      "accuracy": 79.0,
+      "auc": 0.818,
+      "observations": 7793,
+      "innovation": "+Defaults"
+    },
+    {
+      "version": "v4",
+      "accuracy": 78.8,
+      "auc": 0.82,
+      "observations": 7793,
+      "innovation": "+UCI Inference"
+    },
+    {
+      "version": "v5",
+      "accuracy": 76.9,
+      "auc": 0.83,
+      "observations": 8188,
+      "innovation": "+H2H"
+    },
+    {
+      "version": "v6",
+      "accuracy": 77.6,
+      "auc": 0.835,
+      "observations": 8357,
+      "innovation": "+New Rider"
+    }
+  ],
+  "current_version": "v6"
+}

@@ -19,6 +19,20 @@ import config
 from head_to_head import get_h2h_matrix, calculate_h2h_features
 from src.features.names import standardize_name
 
+
+# ============================================================
+# RACE REGISTRY - Auto-loads from pipeline-generated registry
+# ============================================================
+
+@st.cache_data
+def load_race_registry():
+    """Load race registry from JSON file (auto-updated by pipeline)."""
+    registry_path = config.CLEAN_DIR / "race_registry.json"
+    if registry_path.exists():
+        with open(registry_path, 'r') as f:
+            return json.load(f)
+    return {"races": [], "model_versions": [], "current_version": "v1"}
+
 st.set_page_config(
     page_title="VeloPredict: Cyclocross Predictions",
     page_icon="🚴",
@@ -441,65 +455,39 @@ with tab4:
     st.markdown("**VeloPredict Season Tracker | UCI Cyclocross World Cup 2025-26**")
 
     # ============================================================
-    # RACE_CONFIG - Single source of truth for all race data
-    # Add new races here - stats are auto-calculated from files
+    # RACE_CONFIG - Now auto-loaded from registry (updated by pipeline)
     # ============================================================
 
-    RACE_CONFIG = {
-        "Sardinia (Dec 7)": {
-            "name": "Sardinia",
-            "date": "Dec 7",
-            "version": "v6",
-            "threshold": 0.55,
-            "predictions": {
-                "M": "data/clean/predictions_20251203_2105.csv",
-                "W": "data/clean/predictions_20251203_2032.csv",
-            },
-            "results": {
-                "M": "data/results/Results__UCI-World-Cup__Sardinia__Men-Elite__2025-12-07__Sardinia-ITALY.csv",
-                "W": "data/results/Results__UCI-World-Cup__Sardinia__Women-Elite__2025-12-07__Sardinia-ITALY.csv",
-            }
-        },
-        "Flamanville (Nov 30)": {
-            "name": "Flamanville",
-            "date": "Nov 30",
-            "version": "v2",
-            "threshold": 0.50,
-            "predictions": {
-                "M": "data/clean/predictions_flamanville_men_elite.csv",
-                "W": "data/clean/predictions_flamanville_women_elite.csv",
-            },
-            "results": {
-                "M": "data/results/Results__UCI-World-Cup__Flamanville__Men-Elite__2025-11-30__Flamanville-FRANCE.csv",
-                "W": "data/results/Results__UCI-World-Cup__Flamanville__Women-Elite__2025-11-30__Flamanville-FRANCE.csv",
-            }
-        },
-        "Tabor (Nov 23)": {
-            "name": "Tabor",
-            "date": "Nov 23",
-            "version": "v1",
-            "threshold": 0.50,
-            "predictions": {
-                "M": "data/clean/predictions_tabor_men_elite.csv",
-                "W": "data/clean/predictions_tabor_women_elite.csv",
-            },
-            "results": {
-                "M": "data/results/Results__UCI-World-Cup__Tabor__Men-Elite__2025-11-23__Tabor-CZECHIA.csv",
-                "W": "data/results/Results__UCI-World-Cup__Tabor__Women-Elite__2025-11-23__Tabor-CZECHIA.csv",
-            }
-        },
-    }
+    registry = load_race_registry()
 
-    # Model version history (update when training new models)
-    VERSIONS = [
+    # Convert registry format to RACE_CONFIG format for compatibility
+    RACE_CONFIG = {}
+    for race in registry.get("races", []):
+        # Only include races with both predictions and results
+        if race.get("predictions") and race.get("results"):
+            race_key = f"{race['name']} ({race['date'][5:]})"  # e.g., "Sardinia (12-07)"
+            RACE_CONFIG[race_key] = {
+                "name": race["name"],
+                "date": race["date"][5:] if len(race["date"]) > 5 else race["date"],
+                "version": race.get("version", "v1"),
+                "threshold": race.get("threshold", 0.55),
+                "predictions": {
+                    "M": race["predictions"].get("Men Elite", ""),
+                    "W": race["predictions"].get("Women Elite", ""),
+                },
+                "results": {
+                    "M": race["results"].get("Men Elite", ""),
+                    "W": race["results"].get("Women Elite", ""),
+                }
+            }
+
+    # Model version history (from registry)
+    VERSIONS = registry.get("model_versions", [
         {"version": "v1", "accuracy": 80.2, "auc": None, "observations": 7724, "innovation": "Baseline RF"},
-        {"version": "v2", "accuracy": 80.2, "auc": None, "observations": 7724, "innovation": "+Threshold"},
-        {"version": "v3", "accuracy": 79.0, "auc": 0.818, "observations": 7793, "innovation": "+Defaults"},
-        {"version": "v4", "accuracy": 78.8, "auc": 0.820, "observations": 7793, "innovation": "+UCI Inference"},
-        {"version": "v5", "accuracy": 76.9, "auc": 0.830, "observations": 8188, "innovation": "+H2H"},
         {"version": "v6", "accuracy": 77.6, "auc": 0.835, "observations": 8357, "innovation": "+New Rider"},
-    ]
+    ])
 
+    # Feature importance (static for now - could be stored in registry later)
     FEATURE_IMPORTANCE = {
         "v1": {"avg_place_last3": 14.9, "best_place_last5": 16.8, "top10_rate_career": 9.7, "uci_points_normalized": 12.1, "h2h_field_score": 0},
         "v4": {"avg_place_last3": 17.6, "best_place_last5": 17.7, "top10_rate_career": 9.7, "uci_points_normalized": 8.1, "h2h_field_score": 0},
