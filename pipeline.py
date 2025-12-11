@@ -125,6 +125,95 @@ def update_model_version(version: str, accuracy: float, auc: float, observations
 
 
 # ============================================================
+# MARKDOWN TABLE UTILITIES
+# ============================================================
+
+def format_markdown_table(headers: list, rows: list, alignments: list = None) -> list:
+    """
+    Generate a properly aligned markdown table.
+
+    Args:
+        headers: List of column header strings
+        rows: List of row data (each row is a list of values)
+        alignments: List of alignments ('left', 'right', 'center') per column
+                   Defaults to 'left' for text, 'right' for numbers
+
+    Returns:
+        List of markdown lines forming the aligned table
+
+    Example:
+        headers = ['#', 'Rider', 'Top-10 %']
+        rows = [[1, 'VAN DER POEL', '99.0%'], [2, 'NYS', '96.2%']]
+        lines = format_markdown_table(headers, rows)
+    """
+    if not rows:
+        return [f"| {' | '.join(headers)} |", f"|{'|'.join(['---'] * len(headers))}|"]
+
+    # Convert all values to strings
+    str_rows = [[str(v) for v in row] for row in rows]
+    str_headers = [str(h) for h in headers]
+
+    # Calculate column widths (max of header and all row values)
+    col_widths = []
+    for i in range(len(str_headers)):
+        max_width = len(str_headers[i])
+        for row in str_rows:
+            if i < len(row):
+                max_width = max(max_width, len(row[i]))
+        col_widths.append(max_width)
+
+    # Default alignments: detect numbers for right-align
+    if alignments is None:
+        alignments = []
+        for i, h in enumerate(str_headers):
+            # Check if column contains mostly numbers/percentages
+            sample_values = [row[i] for row in str_rows[:3] if i < len(row)]
+            is_numeric = all(
+                any(c.isdigit() for c in v) and not any(c.isalpha() for c in v.replace('%', ''))
+                for v in sample_values if v.strip()
+            ) if sample_values else False
+            alignments.append('right' if is_numeric else 'left')
+
+    # Build header row
+    header_cells = []
+    for i, h in enumerate(str_headers):
+        if alignments[i] == 'right':
+            header_cells.append(h.rjust(col_widths[i]))
+        elif alignments[i] == 'center':
+            header_cells.append(h.center(col_widths[i]))
+        else:
+            header_cells.append(h.ljust(col_widths[i]))
+    header_line = '| ' + ' | '.join(header_cells) + ' |'
+
+    # Build separator row with alignment markers
+    sep_cells = []
+    for i, width in enumerate(col_widths):
+        if alignments[i] == 'right':
+            sep_cells.append('-' * width + ':')
+        elif alignments[i] == 'center':
+            sep_cells.append(':' + '-' * width + ':')
+        else:
+            sep_cells.append('-' * (width + 1))
+    sep_line = '|' + '|'.join(sep_cells) + '|'
+
+    # Build data rows
+    lines = [header_line, sep_line]
+    for row in str_rows:
+        cells = []
+        for i in range(len(str_headers)):
+            val = row[i] if i < len(row) else ''
+            if alignments[i] == 'right':
+                cells.append(val.rjust(col_widths[i]))
+            elif alignments[i] == 'center':
+                cells.append(val.center(col_widths[i]))
+            else:
+                cells.append(val.ljust(col_widths[i]))
+        lines.append('| ' + ' | '.join(cells) + ' |')
+
+    return lines
+
+
+# ============================================================
 # REPORT GENERATION
 # ============================================================
 
@@ -140,10 +229,6 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
 
     high_conf = predictions_df[predictions_df["Top-10 Probability"] >= 0.70]
 
-    # Calculate max rider name length for alignment (including ** markers)
-    max_name_len = max(len(row['Rider']) + (4 if row['Top-10 Probability'] >= 0.70 else 0)
-                       for _, row in top10_preds.iterrows()) if len(top10_preds) > 0 else 20
-
     lines.extend([
         f"## {category}",
         f"",
@@ -151,24 +236,27 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
         f"",
         f"### Predicted Top-10",
         f"",
-        f"| #  | {'Rider':<{max_name_len}} | Top-10 % | Podium % | H2H  | Form |",
-        f"|----|-{'-'*max_name_len}-|----------|----------|------|------|",
     ])
 
+    # Build table rows
+    table_rows = []
     for i, (_, row) in enumerate(top10_preds.iterrows(), 1):
-        h2h = f"{row['H2H Field Score']*100:3.0f}%" if row['H2H Confidence'] > 0.3 else "N/A "
-        form = f"{row['Recent Form']:4.1f}" if pd.notna(row['Recent Form']) else "N/A "
-        top10_pct = f"{row['Top-10 Probability']*100:5.1f}%"
-        top3_pct = f"{row['Top-3 Probability']*100:5.1f}%"
+        h2h = f"{row['H2H Field Score']*100:.0f}%" if row['H2H Confidence'] > 0.3 else "N/A"
+        form = f"{row['Recent Form']:.1f}" if pd.notna(row['Recent Form']) else "N/A"
+        top10_pct = f"{row['Top-10 Probability']*100:.1f}%"
+        top3_pct = f"{row['Top-3 Probability']*100:.1f}%"
 
         if row['Top-10 Probability'] >= 0.70:
             rider_name = f"**{row['Rider']}**"
         else:
             rider_name = row['Rider']
 
-        lines.append(
-            f"| {i:2d} | {rider_name:<{max_name_len}} | {top10_pct:>8} | {top3_pct:>8} | {h2h:>4} | {form:>4} |"
-        )
+        table_rows.append([i, rider_name, top10_pct, top3_pct, h2h, form])
+
+    # Use format_markdown_table for aligned output
+    headers = ['#', 'Rider', 'Top-10 %', 'Podium %', 'H2H', 'Form']
+    alignments = ['right', 'left', 'right', 'right', 'right', 'right']
+    lines.extend(format_markdown_table(headers, table_rows, alignments))
 
     lines.extend([
         f"",
@@ -193,6 +281,162 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
             lines.append(f"- {row['Rider']}")
 
     lines.append("")
+    return lines
+
+
+def _generate_metrics_explanation() -> list:
+    """Generate the Understanding the Metrics section for reports."""
+    lines = [
+        "## Understanding the Metrics",
+        "",
+        "### Top-10 Probability",
+        "",
+        "**What it measures:** The likelihood a rider finishes in positions 1-10 (scoring positions in UCI World Cup).",
+        "",
+        "**How it's calculated:**",
+        "- A Random Forest classifier trained on 8,357+ historical race results",
+        "- Uses Platt scaling calibration so probabilities reflect actual historical outcomes",
+        "- When model says 70%, historically ~70% of riders at that probability finish Top-10",
+        "",
+        "**Key inputs:**",
+        "- Head-to-head win rate vs this specific field (22.5% importance)",
+        "- Recent form: avg finish last 3 races, best finish last 5 races",
+        "- Career Top-10 rate across all races",
+        "- Last race finish position",
+        "- UCI points tier and team quality",
+        "",
+        "**Interpreting the values:**",
+        "- **>90%** = Virtual lock for Top-10 (elite favorites)",
+        "- **70-90%** = High confidence prediction",
+        "- **55-70%** = Likely Top-10 but with uncertainty",
+        "- **<55%** = Outside our prediction threshold",
+        "",
+        "---",
+        "",
+        "### Podium Probability (Top-3)",
+        "",
+        "**What it measures:** The likelihood a rider finishes on the podium (positions 1-3).",
+        "",
+        "**How it's calculated:**",
+        "- Separate Random Forest model trained specifically for podium prediction",
+        "- Much harder to predict than Top-10 (only 3 spots vs 10)",
+        "- Also uses Platt scaling for calibrated probabilities",
+        "",
+        "**Key inputs:**",
+        "- Same features as Top-10 model, but weighted differently",
+        "- Career podium rate (top3_rate_career) becomes more important",
+        "- H2H dominance matters more - need to beat almost everyone",
+        "",
+        "**Interpreting the values:**",
+        "- **>50%** = Clear podium favorite (rare - usually only 1-2 riders per race)",
+        "- **20-50%** = Realistic podium contender",
+        "- **5-20%** = Outside chance if favorites falter",
+        "- **<5%** = Would require multiple surprises",
+        "",
+        "**Why podium is harder to predict:**",
+        "- Only 3 spots vs 10 for Top-10",
+        "- More dependent on race-day tactics and luck",
+        "- One crash or mechanical can reshuffle entire podium",
+        "",
+        "---",
+        "",
+        "### Form Score",
+        "",
+        "**What it measures:** A rider's recent racing performance, indicating current fitness and momentum.",
+        "",
+        "**How it's calculated:**",
+        "- `avg_place_last3`: Average finishing position in last 3 races",
+        "- Lower is better (Form 1.0 = averaging 1st place)",
+        "- Only counts races where rider finished (DNF/DNS excluded from average)",
+        "",
+        "**Example calculation:**",
+        "- Rider finished P1, P2, P1 in last 3 races -> Form = (1+2+1)/3 = **1.3**",
+        "- Rider finished P5, P8, P10 -> Form = (5+8+10)/3 = **7.7**",
+        "",
+        "**Interpreting the values:**",
+        "",
+    ]
+
+    # Form score interpretation table
+    form_headers = ['Form Score', 'Interpretation']
+    form_rows = [
+        ['1.0 - 2.0', 'Elite form, winning/podiuming'],
+        ['2.0 - 5.0', 'Strong form, consistent Top-5'],
+        ['5.0 - 10.0', 'Solid form, regular Top-10'],
+        ['10.0 - 20.0', 'Mixed results, inconsistent'],
+        ['>20.0', 'Poor recent form or limited data'],
+    ]
+    lines.extend(format_markdown_table(form_headers, form_rows, ['left', 'left']))
+
+    lines.extend([
+        "",
+        "**Why it matters:**",
+        "- Captures current fitness that UCI points (updated monthly) miss",
+        "- A rider on a hot streak is more dangerous than rankings suggest",
+        "- Recent form is 13.6% of model importance (3rd most important feature)",
+        "",
+        "---",
+        "",
+        "### Career Top-10 Rate",
+        "",
+        "**What it measures:** Historical consistency - what percentage of a rider's career races resulted in Top-10 finishes.",
+        "",
+        "**How it's calculated:**",
+        "- `top10_rate_career = (# of Top-10 finishes) / (# of races completed)`",
+        "- Only uses data BEFORE the current race (no data leakage)",
+        "- Builds up over a rider's career in our dataset",
+        "",
+        "**Example:**",
+        "- Rider has 20 races, finished Top-10 in 18 -> Rate = 18/20 = **90%**",
+        "- Rider has 50 races, finished Top-10 in 25 -> Rate = 25/50 = **50%**",
+        "",
+        "**Interpreting the values:**",
+        "",
+    ])
+
+    # Career rate interpretation table
+    career_headers = ['Career Rate', 'Rider Profile']
+    career_rows = [
+        ['>90%', 'Elite - almost always scores (MVDP, Brand)'],
+        ['70-90%', 'Top-tier professional'],
+        ['50-70%', 'Strong but inconsistent'],
+        ['30-50%', 'Mid-pack regular'],
+        ['<30%', 'Back of field or new rider'],
+    ]
+    lines.extend(format_markdown_table(career_headers, career_rows, ['left', 'left']))
+
+    lines.extend([
+        "",
+        "**Why it matters:**",
+        "- Provides baseline expectation independent of current form",
+        "- Helps identify riders who consistently perform vs one-hit wonders",
+        "- 11.2% of model importance (4th most important feature)",
+        "",
+        "---",
+        "",
+        "### Head-to-Head (H2H)",
+        "",
+        "**What it measures:** A rider's historical win rate against the specific opponents in this startlist.",
+        "",
+        "**How it's calculated:**",
+        "- For each pair of riders who have raced together, track who finished ahead",
+        "- H2H score = (wins against field) / (total matchups with field)",
+        "- Only uses races BEFORE the current race (no data leakage)",
+        "",
+        "**Interpreting the values:**",
+        "- **H2H 90%+** = Historically beats almost everyone in the field",
+        "- **H2H 70-90%** = Strong record against this field",
+        "- **H2H 50-70%** = Competitive, mixed results",
+        "- **H2H <50%** = Usually loses to this field",
+        "- **H2H N/A** = New rider or insufficient head-to-head data",
+        "",
+        "**Why it matters:**",
+        "- #1 most important feature (22.5% of model importance)",
+        "- Captures matchup-specific dynamics that other features miss",
+        "- A rider who always beats this field is more likely to do so again",
+        "",
+    ])
+
     return lines
 
 
@@ -223,16 +467,24 @@ def generate_predictions_report(
             # Category already in report, skip
             return str(report_path)
 
-        # Add new category section before footer
+        # Add new category section before metrics explanation (or footer if no metrics)
+        metrics_marker = "---\n\n## Understanding the Metrics"
         footer_marker = "---\n\n*Generated by"
-        if footer_marker in existing_content:
+
+        new_section = _generate_category_section(predictions_df, category, threshold)
+        new_section_text = "---\n\n" + '\n'.join(new_section)
+
+        if metrics_marker in existing_content:
+            # Insert before metrics section
+            parts = existing_content.split(metrics_marker, 1)
+            updated_content = parts[0] + new_section_text + metrics_marker + parts[1]
+        elif footer_marker in existing_content:
+            # No metrics section, insert before footer
             parts = existing_content.rsplit(footer_marker, 1)
-            new_section = _generate_category_section(predictions_df, category, threshold)
-            updated_content = parts[0] + "---\n\n" + '\n'.join(new_section) + footer_marker + parts[1]
+            updated_content = parts[0] + new_section_text + footer_marker + parts[1]
         else:
             # No footer found, just append
-            new_section = _generate_category_section(predictions_df, category, threshold)
-            updated_content = existing_content + "\n---\n\n" + '\n'.join(new_section)
+            updated_content = existing_content + "\n" + new_section_text
 
         with open(report_path, 'w') as f:
             f.write(updated_content)
@@ -253,6 +505,11 @@ def generate_predictions_report(
 
     # Add category section
     lines.extend(_generate_category_section(predictions_df, category, threshold))
+
+    # Add metrics explanation section
+    lines.append("---")
+    lines.append("")
+    lines.extend(_generate_metrics_explanation())
 
     lines.extend([
         f"---",
@@ -280,14 +537,25 @@ def _generate_validation_category_section(
     missed = matched_df[(~matched_df['predicted_top10']) & (matched_df['actual_top10'])].sort_values('actual_place')
     false_pos = matched_df[(matched_df['predicted_top10']) & (~matched_df['actual_top10'])].sort_values('actual_place')
 
+    # Build validation metrics table using format_markdown_table
+    recall_val = f"{validation_results['recall']:.1%} ({len(correct)}/{validation_results['actual_top10']})"
+    precision_val = f"{validation_results['precision']:.1%} ({len(correct)}/{validation_results['predicted_top10']})"
+    high_conf_val = f"{validation_results.get('high_conf_accuracy', 0):.1%}"
+
     lines.extend([
         f"## {category}",
         f"",
-        f"| Metric | Value |",
-        f"|--------|-------|",
-        f"| **Recall** | {validation_results['recall']:.1%} ({len(correct)}/{validation_results['actual_top10']}) |",
-        f"| **Precision** | {validation_results['precision']:.1%} ({len(correct)}/{validation_results['predicted_top10']}) |",
-        f"| High Confidence Accuracy | {validation_results.get('high_conf_accuracy', 0):.1%} |",
+    ])
+
+    metrics_headers = ['Metric', 'Value']
+    metrics_rows = [
+        ['**Recall**', recall_val],
+        ['**Precision**', precision_val],
+        ['High Confidence Accuracy', high_conf_val],
+    ]
+    lines.extend(format_markdown_table(metrics_headers, metrics_rows, ['left', 'left']))
+
+    lines.extend([
         f"",
         f"### Correct Predictions",
         f"",

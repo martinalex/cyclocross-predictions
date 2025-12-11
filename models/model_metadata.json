@@ -55,15 +55,15 @@
     "h2h_field_score": 0.5,
     "is_new_rider": 0
   },
-  "top10_accuracy": 0.8362706083001705,
-  "top10_auc": 0.8556133632006165,
-  "top10_brier_score": 0.13617554786539535,
-  "top10_log_loss": 0.5395655353334649,
-  "top3_accuracy": 0.9215463331438317,
-  "baseline_accuracy": 0.5406480955088119,
-  "improvement_vs_baseline": 0.29562251279135865,
-  "train_size": 7033,
-  "test_size": 1759,
+  "top10_accuracy": 0.8351274787535411,
+  "top10_auc": 0.8537638698501681,
+  "top10_brier_score": 0.13910923198656497,
+  "top10_log_loss": 0.5645086688153799,
+  "top3_accuracy": 0.9314447592067989,
+  "baseline_accuracy": 0.5405099150141643,
+  "improvement_vs_baseline": 0.29461756373937675,
+  "train_size": 7058,
+  "test_size": 1765,
   "calibration_method": "sigmoid (Platt scaling)",
-  "training_date": "2025-12-08 09:06:35.821585"
+  "training_date": "2025-12-11 05:50:56.704504"
 }

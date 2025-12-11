@@ -5,9 +5,20 @@ Uses Claude to generate natural language explanations of predictions,
 making the ML model's outputs more accessible and insightful.
 """
 import os
+from pathlib import Path
 from anthropic import Anthropic
 import pandas as pd
 from typing import Optional
+
+# Auto-load .env file if present
+try:
+    from dotenv import load_dotenv
+    # Look for .env in project root
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    pass  # python-dotenv not installed, rely on system env vars
 
 
 # Initialize client (uses ANTHROPIC_API_KEY env var)
