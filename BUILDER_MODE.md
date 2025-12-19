@@ -1,7 +1,7 @@
-# The Phoenix Launch: 90-Day AI Product Ecosystem Experiment
+# Builder Mode: A 90-Day AI Product Ecosystem Experiment
 
 ## Mission Statement
-Validate a three-platform AI ecosystem in 90 days: VeloPredict (personal), VeloIntel (consumer), and WellnessAI (enterprise). Test business viability while building portfolio-grade products that demonstrate Principal PM capabilities for consulting firm roles.
+Validate a three-platform AI ecosystem in 90 days: VeloPredict (personal), VeloIntel (consumer), and WellnessAI (enterprise). Test business viability while building portfolio-grade products that demonstrate Principal PM capabilities for consulting firm roles. This experiment now also includes a fourth pillar: visible thought leadership through Medium, LinkedIn, GitHub, and public demos to make the work legible and signal Principal-level AI product leadership.
 
 ## The Ecosystem Vision
 
@@ -32,6 +32,8 @@ Each platform builds on the last, creating a data flywheel and revenue progressi
 **Personal → Consumer → Enterprise**  
 **Free tool → Subscription → B2B licensing**  
 **Portfolio piece → Viable business → Consulting channel**
+
+**Execution → Visibility → Opportunity**
 
 ---
 
@@ -91,7 +93,7 @@ Each platform uses the **right tool for the job**, not the most impressive-sound
 1. **Time Series Models** — LSTM/TCN on daily metrics predicts readiness, fatigue, injury risk
 2. **Session Embeddings** — Learned representations of workouts enable similarity search
 3. **RAG Knowledge Base** — Training principles, periodization theory, recovery guidelines
-4. **AI Coach Agent** — Calls readiness models, recommender, and RAG to generate weekly plans
+4. **AI Coach Agent** — A single tool-calling agent that invokes readiness models, embedding search, and RAG to build personalized plans (no multi-agent orchestration).
 
 **Skip:** Multi-agent orchestration (one capable agent is enough), full RL training optimization
 
@@ -104,14 +106,14 @@ Each platform uses the **right tool for the job**, not the most impressive-sound
 - Enterprise buyers care about ROI, not model complexity
 - Bandits optimize offers in real-time (next-best-action done right)
 - Uplift modeling proves incrementality (consulting-firm-sexy)
-- LLM copilot makes analytics accessible to non-technical stakeholders
+- LLM Analyst Agent makes analytics accessible to non-technical stakeholders
 
 **Key Technical Components:**
 1. **Propensity Models** — Likelihood to join, complete, respond to challenges
 2. **Two-Tower Recommender** — Next-best challenge, next-best reward
 3. **Contextual Bandits** — Real-time offer optimization with exploration
 4. **Uplift/Causal Models** — Measure true incremental impact on behavior
-5. **LLM Analyst Copilot** — Natural language queries over metrics
+5. **LLM Analyst Agent** — natural language analytics and lightweight workflow triggers.
 
 **Skip:** Complex RL simulation, vision models (unless receipt scanning later)
 
@@ -126,7 +128,7 @@ These components are built once and reused across all three platforms:
 | **Model API Layer** | `/predict`, `/recommend`, `/optimize` endpoints | FastAPI |
 | **Observability** | Data drift detection, performance dashboards | Custom + Weights & Biases |
 | **Explainability** | SHAP values fed into LLM explanations | SHAP + prompt templates |
-| **Phoenix Copilot** | Unified LLM interface to query all three platforms | Claude API + tools |
+| **Builder Mode Copilot** | Unified LLM/agent interface across all three platforms. | Claude API + tools |
 
 ### Technology Learning Path (Aligned to 90 Days)
 
@@ -390,6 +392,7 @@ Improved VeloPredict Accuracy
 
 **Workflow Automation (Phase 2 - Post-Validation):**
 - n8n or Make.com for visual workflow orchestration
+- Agents handle reasoning and tool-calling; n8n handles predictable workflows.
 - *Potential use cases:*
   - VeloPredict: Automated race data scraping → retraining → prediction publishing pipeline
   - VeloIntel: Daily wearables sync → readiness scoring → personalized notification triggers
@@ -397,7 +400,7 @@ Improved VeloPredict Accuracy
   - WellnessAI: Challenge completion → points award → user notification chain
   - WellnessAI: Retailer onboarding and weekly admin digest workflows
   - WellnessAI: Integration with retailer loyalty systems (many already use Zapier/n8n)
-  - Cross-platform: Phoenix Copilot orchestration across all three platforms
+  - Cross-platform: Builder Mode Copilot orchestration across all three platforms
 - *Why Phase 2:* Adds infrastructure complexity; FastAPI + cron sufficient for MVP validation
 
 ## Code Quality Standards
@@ -415,14 +418,34 @@ Improved VeloPredict Accuracy
 - Scalable architecture (even if MVP functionality)
 - Clear separation: notebooks for exploration, .py for production
 
+## Thought Leadership & Visibility Plan
+
+**Purpose:** Make the work legible, generate inbound opportunities, and create proof-of-work for Principal-level AI product roles.
+
+**Channels:**
+- **Medium:** 1 anchor essay per month (e.g., Builder Mode series, deep dives on VeloPredict/VeloIntel/WellnessAI).
+- **LinkedIn:** 1–2 posts per week documenting progress, decisions, and lessons learned.
+- **GitHub:** Public repositories with production-quality code, clear READMEs, and tagged releases.
+- **YouTube (optional):** Short walkthroughs of key milestones (VeloPredict demo, AI coach in VeloIntel, WellnessAI MVP).
+
+**Cadence:**
+- **Weekly:** Ship a tangible product increment and share a brief LinkedIn update or case study.
+- **Monthly:** Publish a long-form reflection on Medium summarizing progress, challenges, and next steps.
+
+**Visibility Metrics:**
+- Growth in LinkedIn profile views and post engagement.
+- Medium reads and highlights on Builder Mode-related pieces.
+- GitHub stars/forks on the main repos.
+- Inbound conversations (recruiters, hiring managers, investors, consulting firms).
+
 ## Success Metrics Dashboard
 
 ### Week 4 (VeloPredict)
-- Prediction accuracy: ___% (target: 80%+)
-- Brier score: ___ (target: <0.2)
-- Cyclists validated with: ___ (target: 10)
-- GitHub stars: ___
-- LinkedIn post engagement: ___
+- Prediction accuracy: 90% Top-10 on first live test at Tabor (target: 80%+ generalized)
+- Brier score: TBD (target: <0.2)
+- Cyclists validated with: TBD (target: 10)
+- GitHub stars: TBD
+- LinkedIn post engagement: TBD
 
 ### Week 8 (VeloIntel)
 - Active beta users: ___ (target: 20)
@@ -441,12 +464,13 @@ Improved VeloPredict Accuracy
 ## Current Status
 
 **Completed:**
-- ✅ Phoenix Launch strategy defined
+- ✅ Builder Mode strategy defined
+- ✅ 6 versions of the VeloPredict model shipped; first live test achieved 90% Top-10 accuracy at Tabor.
 - ✅ AI technology architecture mapped
 - ✅ VS Code + Claude Code environment setup
 - ✅ Initial race prediction notebook with pandas
 - ✅ PDF scraping pipeline started
-- ✅ First live test: 90% Top-10 accuracy at Tabor
+ 
 
 **This Week:**
 - [ ] Complete data extraction pipeline

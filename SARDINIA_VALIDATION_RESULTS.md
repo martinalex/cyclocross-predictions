@@ -265,3 +265,25 @@ Initial analysis incorrectly stated VDP/WVA were not in training data. After dee
 
 *Validation completed December 8, 2025*
 *Model: VeloPredict v6 (H2H + New Rider Penalty)*
+
+---
+
+## Probability Distribution Analysis
+
+| Metric           | Value | Interpretation        |
+|-----------------|-----:|----------------------|
+| Low (<30%)       | 75.4% | Non-contenders        |
+| Mid (30-60%)     | 13.0% | Uncertain zone        |
+| High (>60%)      | 11.6% | Likely contenders     |
+| Mean Probability | 20.0% | Average across field  |
+| Std Deviation    | 0.277 | Probability spread    |
+| New Riders       |     8 | No prior race history |
+| Field Size       |    69 | Total riders          |
+
+**Pattern:** MODERATE
+- Typical distribution with clear favorites and some uncertainty
+
+**What this means:**
+- 75% of riders had <30% probability (clear non-contenders)
+- 13% in the uncertain 30-60% range
+- 12% were predicted >60% (likely Top-10)

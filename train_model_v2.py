@@ -274,7 +274,12 @@ print("=" * 60)
 joblib.dump(model_top10_calibrated, MODELS_DIR / "top10_classifier.joblib")
 joblib.dump(model_top3_calibrated, MODELS_DIR / "top3_classifier.joblib")
 
-# Save metadata
+# Save metadata (including feature importance for demo)
+feature_importance_dict = dict(zip(
+    feature_importance['feature'].tolist(),
+    [round(x * 100, 1) for x in feature_importance['importance'].tolist()]
+))
+
 meta = {
     "features": X.columns.tolist(),
     "numeric_features": numeric_features,
@@ -290,7 +295,10 @@ meta = {
     "train_size": len(X_train),
     "test_size": len(X_test),
     "calibration_method": "sigmoid (Platt scaling)",
-    "training_date": str(pd.Timestamp.now())
+    "training_date": str(pd.Timestamp.now()),
+    "feature_importance": feature_importance_dict,
+    "total_observations": len(df),
+    "total_races": int(df['race_id'].nunique())
 }
 
 with open(MODELS_DIR / "model_metadata.json", "w") as f:

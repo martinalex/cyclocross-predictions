@@ -168,6 +168,22 @@ class FeatureBuilder:
         """Extract features for a rider with historical data."""
         latest = rider_history.iloc[0]
 
+        # v6.4 SOP: Always use the record with the most complete cumulative features
+        # This handles data entry inconsistencies where a rider's most recent race
+        # wasn't properly linked to their history (e.g., different name formats)
+        #
+        # Strategy: Find the record with highest races_so_far (most complete history)
+        # Use that for cumulative features, but use latest for point-in-time features
+        form_source = latest
+        if len(rider_history) > 1:
+            # Find record with most races (most complete cumulative data)
+            max_races_idx = rider_history["races_so_far"].fillna(0).idxmax()
+            best_record = rider_history.loc[max_races_idx]
+
+            # Use best record for cumulative features if it has more history
+            if best_record["races_so_far"] > (latest["races_so_far"] or 0):
+                form_source = best_record
+
         # Get UCI points normalized - prefer centralized rankings over historical data
         max_uci_rank = 700
         if std_name in self.uci_rankings:
@@ -176,28 +192,32 @@ class FeatureBuilder:
         elif startlist_uci_rank is not None and not pd.isna(startlist_uci_rank) and startlist_uci_rank > 0:
             uci_points_norm = min(startlist_uci_rank / max_uci_rank, 1.0)
         else:
-            uci_points_norm = latest["uci_points_normalized"]
+            uci_points_norm = form_source["uci_points_normalized"]
 
         # Cap races_so_far to avoid penalizing experienced riders
-        races_so_far = min(latest["races_so_far"] + 1, 10)
+        # Use the higher count between form_source and latest
+        races_so_far = min(max(form_source["races_so_far"] or 0, latest["races_so_far"] or 0) + 1, 10)
 
         features = {
             "uci_points_normalized": uci_points_norm,
             "races_so_far": races_so_far,
-            "avg_place_last3": latest["avg_place_last3"],
-            "best_place_last5": latest["best_place_last5"],
+            # Cumulative features from best available record
+            "avg_place_last3": form_source["avg_place_last3"],
+            "best_place_last5": form_source["best_place_last5"],
+            "top3_rate_career": form_source["top3_rate_career"],
+            "top10_rate_career": form_source["top10_rate_career"],
+            "points_tier": form_source["points_tier"],
+            "team_tier": form_source["team_tier"],
+            # Point-in-time features from latest race
             "last_place": latest["Place"],
             "days_since_last_race": 7,  # Assume weekly racing
             "last_carried_points": latest["Carried Points"],
             "last_scored_points": latest["Scored Points"],
-            "top3_rate_career": latest["top3_rate_career"],
-            "top10_rate_career": latest["top10_rate_career"],
+            # Static features
             "series_appearances": 0,  # Reset for new series
             "is_elite": 1 if "Elite" in category else 0,
             "is_women": 1 if "Women" in category else 0,
             "is_new_rider": 0,  # Known rider with history
-            "points_tier": latest["points_tier"],
-            "team_tier": latest["team_tier"]
         }
 
         return RiderFeatures(

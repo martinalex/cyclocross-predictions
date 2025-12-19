@@ -217,14 +217,81 @@ def format_markdown_table(headers: list, rows: list, alignments: list = None) ->
 # REPORT GENERATION
 # ============================================================
 
+def _generate_rider_note(row: pd.Series) -> str:
+    """Generate a brief note about a rider based on their stats."""
+    notes = []
+
+    # Form-based notes
+    form = row.get('Recent Form', None)
+    if pd.notna(form):
+        if form <= 1.5:
+            notes.append("winning form")
+        elif form <= 3.0:
+            notes.append("strong form")
+        elif form >= 15.0:
+            notes.append("poor recent form")
+
+    # H2H-based notes
+    h2h = row.get('H2H Field Score', None)
+    h2h_conf = row.get('H2H Confidence', 0)
+    if pd.notna(h2h) and h2h_conf > 0.3:
+        if h2h >= 0.95:
+            notes.append("dominates field")
+        elif h2h >= 0.85:
+            notes.append("strong H2H")
+        elif h2h <= 0.3:
+            notes.append("struggles vs field")
+    elif h2h_conf <= 0.3:
+        notes.append("limited H2H data")
+
+    # Career rate notes
+    career_rate = row.get('Career Top-10 Rate', None)
+    if pd.notna(career_rate):
+        if career_rate >= 0.90:
+            notes.append("elite consistency")
+        elif career_rate <= 0.30 and career_rate > 0:
+            notes.append("rarely scores")
+
+    # Status-based notes
+    status = row.get('Status', 'found')
+    if status == 'new_rider':
+        notes.append("season debut")
+
+    # DNS reason if present
+    dns_reason = row.get('DNS Reason', None)
+    if pd.notna(dns_reason) and dns_reason:
+        notes.append(str(dns_reason).replace('DNS Risk: ', ''))
+
+    # Podium contender
+    top3_prob = row.get('Top-3 Probability', 0)
+    if top3_prob >= 0.30:
+        notes.append("podium contender")
+    elif top3_prob >= 0.15:
+        notes.append("podium threat")
+
+    return "; ".join(notes[:3]) if notes else "-"
+
+
 def _generate_category_section(predictions_df: pd.DataFrame, category: str, threshold: float) -> list:
     """Generate markdown lines for a single category's predictions."""
     lines = []
 
-    # Filter predictions
-    top10_preds = predictions_df[
-        (predictions_df["Top-10 Probability"] >= threshold) &
-        (predictions_df["DNS Risk"] == False)
+    # Include ALL riders (no DNS filtering) - DNS is just informational
+    all_riders = predictions_df.copy()
+
+    top10_preds = all_riders[
+        all_riders["Top-10 Probability"] >= threshold
+    ].sort_values("Top-10 Probability", ascending=False)
+
+    # Borderline: between 30% and threshold (55%)
+    borderline_preds = all_riders[
+        (all_riders["Top-10 Probability"] >= 0.30) &
+        (all_riders["Top-10 Probability"] < threshold)
+    ].sort_values("Top-10 Probability", ascending=False)
+
+    # Rest of field: below 30%
+    rest_of_field = all_riders[
+        all_riders["Top-10 Probability"] < 0.30
     ].sort_values("Top-10 Probability", ascending=False)
 
     high_conf = predictions_df[predictions_df["Top-10 Probability"] >= 0.70]
@@ -238,24 +305,28 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
         f"",
     ])
 
-    # Build table rows
+    # Build Top-10 table rows with Notes (DNS flag shown in notes if applicable)
     table_rows = []
     for i, (_, row) in enumerate(top10_preds.iterrows(), 1):
         h2h = f"{row['H2H Field Score']*100:.0f}%" if row['H2H Confidence'] > 0.3 else "N/A"
         form = f"{row['Recent Form']:.1f}" if pd.notna(row['Recent Form']) else "N/A"
         top10_pct = f"{row['Top-10 Probability']*100:.1f}%"
         top3_pct = f"{row['Top-3 Probability']*100:.1f}%"
+        note = _generate_rider_note(row)
 
-        if row['Top-10 Probability'] >= 0.70:
-            rider_name = f"**{row['Rider']}**"
+        # Add DNS flag to rider name if applicable
+        if row.get('DNS Risk', False):
+            rider_display = f"{row['Rider']} ⚠️"
+        elif row['Top-10 Probability'] >= 0.70:
+            rider_display = f"**{row['Rider']}**"
         else:
-            rider_name = row['Rider']
+            rider_display = row['Rider']
 
-        table_rows.append([i, rider_name, top10_pct, top3_pct, h2h, form])
+        table_rows.append([i, rider_display, top10_pct, top3_pct, h2h, form, note])
 
     # Use format_markdown_table for aligned output
-    headers = ['#', 'Rider', 'Top-10 %', 'Podium %', 'H2H', 'Form']
-    alignments = ['right', 'left', 'right', 'right', 'right', 'right']
+    headers = ['#', 'Rider', 'Top-10 %', 'Podium %', 'H2H', 'Form', 'Notes']
+    alignments = ['right', 'left', 'right', 'right', 'right', 'right', 'left']
     lines.extend(format_markdown_table(headers, table_rows, alignments))
 
     lines.extend([
@@ -264,21 +335,59 @@ def _generate_category_section(predictions_df: pd.DataFrame, category: str, thre
         f"",
     ])
 
-    podium_top3 = predictions_df[predictions_df["DNS Risk"] == False].nlargest(3, "Top-3 Probability")
+    podium_top3 = all_riders.nlargest(3, "Top-3 Probability")
     medals = ["1.", "2.", "3."]
     for medal, (_, row) in zip(medals, podium_top3.iterrows()):
-        lines.append(f"{medal} **{row['Rider']}** ({row['Top-3 Probability']*100:.1f}%)")
+        dns_flag = " ⚠️" if row.get('DNS Risk', False) else ""
+        lines.append(f"{medal} **{row['Rider']}**{dns_flag} ({row['Top-3 Probability']*100:.1f}%)")
 
-    # DNS risks
+    # Borderline section
+    if len(borderline_preds) > 0:
+        lines.extend([
+            f"",
+            f"### Borderline (30-55%)",
+            f"",
+        ])
+
+        borderline_rows = []
+        for _, row in borderline_preds.iterrows():
+            h2h = f"{row['H2H Field Score']*100:.0f}%" if row['H2H Confidence'] > 0.3 else "N/A"
+            form = f"{row['Recent Form']:.1f}" if pd.notna(row['Recent Form']) else "N/A"
+            top10_pct = f"{row['Top-10 Probability']*100:.1f}%"
+            note = _generate_rider_note(row)
+            rider_display = f"{row['Rider']} ⚠️" if row.get('DNS Risk', False) else row['Rider']
+            borderline_rows.append([rider_display, top10_pct, h2h, form, note])
+
+        borderline_headers = ['Rider', 'Top-10 %', 'H2H', 'Form', 'Notes']
+        borderline_alignments = ['left', 'right', 'right', 'right', 'left']
+        lines.extend(format_markdown_table(borderline_headers, borderline_rows, borderline_alignments))
+
+    # Full startlist - rest of field
+    if len(rest_of_field) > 0:
+        lines.extend([
+            f"",
+            f"### Rest of Field",
+            f"",
+        ])
+
+        rest_rows = []
+        for _, row in rest_of_field.iterrows():
+            h2h = f"{row['H2H Field Score']*100:.0f}%" if row['H2H Confidence'] > 0.3 else "N/A"
+            top10_pct = f"{row['Top-10 Probability']*100:.1f}%"
+            rider_display = f"{row['Rider']} ⚠️" if row.get('DNS Risk', False) else row['Rider']
+            rest_rows.append([rider_display, top10_pct, h2h])
+
+        rest_headers = ['Rider', 'Top-10 %', 'H2H']
+        rest_alignments = ['left', 'right', 'right']
+        lines.extend(format_markdown_table(rest_headers, rest_rows, rest_alignments))
+
+    # DNS risks legend (informational only)
     dns_risks = predictions_df[predictions_df["DNS Risk"] == True]
     if len(dns_risks) > 0:
         lines.extend([
             f"",
-            f"### DNS Risks",
-            f"",
+            f"*⚠️ = DNS risk flagged (limited recent races - may still start)*",
         ])
-        for _, row in dns_risks.iterrows():
-            lines.append(f"- {row['Rider']}")
 
     lines.append("")
     return lines
@@ -451,6 +560,7 @@ def generate_predictions_report(
     Generate or update a combined markdown predictions report for a race.
 
     Appends category section if report exists, creates new if not.
+    Includes probability distribution analysis for confidence tier insights.
     Returns path to the generated report.
     """
     threshold = config.CONFIDENCE_THRESHOLD
@@ -467,14 +577,19 @@ def generate_predictions_report(
             # Category already in report, skip
             return str(report_path)
 
-        # Add new category section before metrics explanation (or footer if no metrics)
+        # Add new category section before distribution or metrics explanation (or footer if no metrics)
+        distribution_marker = "---\n\n## Probability Distribution Analysis"
         metrics_marker = "---\n\n## Understanding the Metrics"
         footer_marker = "---\n\n*Generated by"
 
         new_section = _generate_category_section(predictions_df, category, threshold)
         new_section_text = "---\n\n" + '\n'.join(new_section)
 
-        if metrics_marker in existing_content:
+        if distribution_marker in existing_content:
+            # Insert before distribution section
+            parts = existing_content.split(distribution_marker, 1)
+            updated_content = parts[0] + new_section_text + distribution_marker + parts[1]
+        elif metrics_marker in existing_content:
             # Insert before metrics section
             parts = existing_content.split(metrics_marker, 1)
             updated_content = parts[0] + new_section_text + metrics_marker + parts[1]
@@ -506,6 +621,13 @@ def generate_predictions_report(
     # Add category section
     lines.extend(_generate_category_section(predictions_df, category, threshold))
 
+    # Calculate and add distribution analysis section
+    distribution = calculate_distribution_metrics(predictions_df)
+    if distribution:
+        lines.append("---")
+        lines.append("")
+        lines.extend(_generate_distribution_section(distribution))
+
     # Add metrics explanation section
     lines.append("---")
     lines.append("")
@@ -521,6 +643,55 @@ def generate_predictions_report(
         f.write('\n'.join(lines))
 
     return str(report_path)
+
+
+def _generate_distribution_section(distribution: dict) -> list:
+    """Generate markdown lines for the distribution analysis section."""
+    if not distribution:
+        return []
+
+    lines = [
+        "## Probability Distribution Analysis",
+        "",
+    ]
+
+    # Distribution table
+    dist_headers = ['Metric', 'Value', 'Interpretation']
+    dist_rows = [
+        ['Low (<30%)', f"{distribution['low_pct']:.1f}%", 'Non-contenders'],
+        ['Mid (30-60%)', f"{distribution['mid_pct']:.1f}%", 'Uncertain zone'],
+        ['High (>60%)', f"{distribution['high_pct']:.1f}%", 'Likely contenders'],
+        ['Mean Probability', f"{distribution['mean_prob']*100:.1f}%", 'Average across field'],
+        ['Std Deviation', f"{distribution['std_prob']:.3f}", 'Probability spread'],
+        ['New Riders', f"{distribution['new_rider_count']}", 'No prior race history'],
+        ['Field Size', f"{distribution['field_size']}", 'Total riders'],
+    ]
+    lines.extend(format_markdown_table(dist_headers, dist_rows, ['left', 'right', 'left']))
+
+    # Determine pattern
+    if distribution['mid_pct'] < 10:
+        pattern = "BIMODAL"
+        pattern_desc = "Model is decisive - clear separation between contenders and non-contenders"
+    elif distribution['mid_pct'] > 20:
+        pattern = "BALANCED"
+        pattern_desc = "Model is uncertain - many riders in the 'maybe' zone"
+    else:
+        pattern = "MODERATE"
+        pattern_desc = "Typical distribution with clear favorites and some uncertainty"
+
+    lines.extend([
+        "",
+        f"**Pattern:** {pattern}",
+        f"- {pattern_desc}",
+        "",
+        "**What this means:**",
+        f"- {distribution['low_pct']:.0f}% of riders had <30% probability (clear non-contenders)",
+        f"- {distribution['mid_pct']:.0f}% in the uncertain 30-60% range",
+        f"- {distribution['high_pct']:.0f}% were predicted >60% (likely Top-10)",
+        "",
+    ])
+
+    return lines
 
 
 def _generate_validation_category_section(
@@ -1129,6 +1300,392 @@ def retrain():
 
 
 # ============================================================
+# DISTRIBUTION METRICS
+# ============================================================
+
+def calculate_distribution_metrics(predictions_df: pd.DataFrame, threshold: float = None) -> dict:
+    """
+    Calculate probability distribution metrics for a set of predictions.
+
+    These metrics help understand model confidence patterns:
+    - Bimodal distribution (most low + some high, empty middle) = decisive model
+    - Balanced distribution (spread across all buckets) = uncertain model
+
+    Args:
+        predictions_df: DataFrame with 'Top-10 Probability' column
+        threshold: Confidence threshold (defaults to config)
+
+    Returns:
+        dict with distribution metrics:
+        - low_pct: % of riders with <30% probability
+        - mid_pct: % of riders with 30-60% probability
+        - high_pct: % of riders with >60% probability
+        - mean_prob: Average probability across all riders
+        - std_prob: Standard deviation of probabilities
+        - new_rider_count: Number of new riders (is_new_rider=1 or Status='new_rider')
+        - field_size: Total number of riders
+    """
+    if threshold is None:
+        threshold = config.CONFIDENCE_THRESHOLD
+
+    # Get probabilities
+    if 'Top-10 Probability' in predictions_df.columns:
+        probs = predictions_df['Top-10 Probability'].dropna()
+    elif 'prob' in predictions_df.columns:
+        probs = predictions_df['prob'].dropna()
+    else:
+        return None
+
+    if len(probs) == 0:
+        return None
+
+    # Count buckets
+    low_count = (probs < 0.30).sum()
+    mid_count = ((probs >= 0.30) & (probs <= 0.60)).sum()
+    high_count = (probs > 0.60).sum()
+    total = len(probs)
+
+    # Calculate percentages
+    low_pct = round(low_count / total * 100, 1)
+    mid_pct = round(mid_count / total * 100, 1)
+    high_pct = round(high_count / total * 100, 1)
+
+    # Calculate statistics
+    mean_prob = round(probs.mean(), 3)
+    std_prob = round(probs.std(), 3)
+
+    # Count new riders
+    new_rider_count = 0
+    if 'is_new_rider' in predictions_df.columns:
+        new_rider_count = int(predictions_df['is_new_rider'].sum())
+    elif 'Status' in predictions_df.columns:
+        new_rider_count = int((predictions_df['Status'] == 'new_rider').sum())
+
+    return {
+        'low_pct': low_pct,
+        'mid_pct': mid_pct,
+        'high_pct': high_pct,
+        'mean_prob': mean_prob,
+        'std_prob': std_prob,
+        'new_rider_count': new_rider_count,
+        'field_size': total
+    }
+
+
+def calculate_distribution_from_files(predictions_path: str, results_path: str = None) -> dict:
+    """
+    Calculate distribution metrics from prediction and optionally result files.
+
+    If results_path is provided, merges predictions with results to get
+    complete picture including actual positions.
+
+    Args:
+        predictions_path: Path to predictions CSV
+        results_path: Optional path to results CSV
+
+    Returns:
+        dict with distribution metrics
+    """
+    predictions_path = Path(predictions_path)
+
+    if not predictions_path.exists():
+        print(f"Warning: Predictions file not found: {predictions_path}")
+        return None
+
+    pred_df = pd.read_csv(predictions_path)
+
+    return calculate_distribution_metrics(pred_df)
+
+
+def update_registry_distribution(race_id: str, distribution: dict):
+    """
+    Add distribution metrics to a race's validation block in the registry.
+
+    Args:
+        race_id: Race ID (e.g., 'namur_2025-12-14')
+        distribution: Distribution metrics dict from calculate_distribution_metrics
+    """
+    registry = load_registry()
+
+    for race in registry["races"]:
+        if race["id"] == race_id:
+            if "validation" not in race:
+                race["validation"] = {}
+            race["validation"]["distribution"] = distribution
+            save_registry(registry)
+            print(f"  Updated distribution for {race_id}")
+            return True
+
+    print(f"  Warning: Race {race_id} not found in registry")
+    return False
+
+
+def update_validation_reports_with_distribution():
+    """
+    Update existing validation markdown reports with distribution sections.
+
+    Reads distribution data from registry and appends to validation reports.
+    """
+    print("=" * 70)
+    print("UPDATING VALIDATION REPORTS WITH DISTRIBUTION")
+    print("=" * 70)
+
+    registry = load_registry()
+    updated_count = 0
+
+    for race in registry["races"]:
+        race_name = race["name"]
+        distribution = race.get("validation", {}).get("distribution")
+
+        if not distribution:
+            print(f"\n{race_name}: No distribution data in registry, skipping")
+            continue
+
+        report_path = config.PROJECT_ROOT / f"{race_name.upper()}_VALIDATION_RESULTS.md"
+
+        if not report_path.exists():
+            print(f"\n{race_name}: Validation report not found at {report_path}")
+            continue
+
+        # Read existing report
+        with open(report_path, 'r') as f:
+            content = f.read()
+
+        # Check if distribution section already exists
+        if "## Probability Distribution Analysis" in content:
+            print(f"\n{race_name}: Distribution section already exists, skipping")
+            continue
+
+        # Generate distribution section
+        dist_lines = _generate_distribution_section(distribution)
+        dist_section = '\n'.join(dist_lines)
+
+        # Find where to insert (before the footer or at the end)
+        footer_marker = "---\n\n*Generated by"
+        if footer_marker in content:
+            parts = content.rsplit(footer_marker, 1)
+            updated_content = parts[0] + "---\n\n" + dist_section + footer_marker + parts[1]
+        else:
+            # No footer, append at end
+            updated_content = content + "\n---\n\n" + dist_section
+
+        # Write updated report
+        with open(report_path, 'w') as f:
+            f.write(updated_content)
+
+        print(f"\n{race_name}: Added distribution section")
+        updated_count += 1
+
+    print(f"\n{'=' * 70}")
+    print(f"Updated {updated_count} validation reports")
+    print(f"{'=' * 70}")
+
+    return updated_count
+
+
+def update_prediction_reports_with_distribution():
+    """
+    Update existing prediction markdown reports with distribution sections.
+
+    Reads distribution data from registry (or calculates from prediction CSVs)
+    and appends to prediction report files (e.g., NAMUR_PREDICTIONS.md).
+    """
+    print("=" * 70)
+    print("UPDATING PREDICTION REPORTS WITH DISTRIBUTION")
+    print("=" * 70)
+
+    registry = load_registry()
+    updated_count = 0
+
+    for race in registry["races"]:
+        race_name = race["name"]
+
+        # Try to get distribution from registry validation block first
+        distribution = race.get("validation", {}).get("distribution")
+
+        # If not in registry, calculate from prediction files
+        if not distribution:
+            print(f"\n{race_name}: Calculating distribution from prediction files...")
+            all_probs = []
+            new_rider_total = 0
+
+            for category, pred_path in race.get("predictions", {}).items():
+                full_path = config.PROJECT_ROOT / pred_path
+                if full_path.exists():
+                    pred_df = pd.read_csv(full_path)
+                    if 'Top-10 Probability' in pred_df.columns:
+                        all_probs.extend(pred_df['Top-10 Probability'].dropna().tolist())
+                    if 'Status' in pred_df.columns:
+                        new_rider_total += (pred_df['Status'] == 'new_rider').sum()
+
+            if all_probs:
+                probs = pd.Series(all_probs)
+                low_count = (probs < 0.30).sum()
+                mid_count = ((probs >= 0.30) & (probs <= 0.60)).sum()
+                high_count = (probs > 0.60).sum()
+                total = len(probs)
+
+                distribution = {
+                    'low_pct': round(low_count / total * 100, 1),
+                    'mid_pct': round(mid_count / total * 100, 1),
+                    'high_pct': round(high_count / total * 100, 1),
+                    'mean_prob': round(probs.mean(), 3),
+                    'std_prob': round(probs.std(), 3),
+                    'new_rider_count': int(new_rider_total),
+                    'field_size': total
+                }
+
+        if not distribution:
+            print(f"\n{race_name}: No distribution data available, skipping")
+            continue
+
+        # Check multiple possible prediction report filenames
+        possible_names = [
+            f"{race_name.upper()}_PREDICTIONS.md",
+            f"{race_name.upper()}_PREDICTIONS_{race['date']}.md",
+            f"{race_name.upper().replace(' ', '-')}_PREDICTIONS.md",
+        ]
+
+        report_path = None
+        for name in possible_names:
+            candidate = config.PROJECT_ROOT / name
+            if candidate.exists():
+                report_path = candidate
+                break
+
+        if not report_path:
+            print(f"\n{race_name}: No prediction report found, skipping")
+            continue
+
+        # Read existing report
+        with open(report_path, 'r') as f:
+            content = f.read()
+
+        # Check if distribution section already exists
+        if "## Probability Distribution Analysis" in content:
+            print(f"\n{race_name}: Distribution section already exists, skipping")
+            continue
+
+        # Generate distribution section
+        dist_lines = _generate_distribution_section(distribution)
+        dist_section = '\n'.join(dist_lines)
+
+        # Find where to insert - prefer before "Understanding the Metrics" or footer
+        metrics_marker = "---\n\n## Understanding the Metrics"
+        footer_marker = "---\n\n*Generated by"
+        alt_footer = "---\n\n*Predictions generated"
+
+        if metrics_marker in content:
+            parts = content.split(metrics_marker, 1)
+            updated_content = parts[0] + "---\n\n" + dist_section + metrics_marker + parts[1]
+        elif footer_marker in content:
+            parts = content.rsplit(footer_marker, 1)
+            updated_content = parts[0] + "---\n\n" + dist_section + footer_marker + parts[1]
+        elif alt_footer in content:
+            parts = content.rsplit(alt_footer, 1)
+            updated_content = parts[0] + "---\n\n" + dist_section + alt_footer + parts[1]
+        else:
+            # No known marker, append at end with separator
+            updated_content = content.rstrip() + "\n\n---\n\n" + dist_section
+
+        # Write updated report
+        with open(report_path, 'w') as f:
+            f.write(updated_content)
+
+        print(f"\n{race_name}: Added distribution section to {report_path.name}")
+        updated_count += 1
+
+    print(f"\n{'=' * 70}")
+    print(f"Updated {updated_count} prediction reports")
+    print(f"{'=' * 70}")
+
+    return updated_count
+
+
+def backfill_distribution_metrics():
+    """
+    Calculate and store distribution metrics for all races in registry.
+
+    This is a one-time operation to populate existing races with
+    the new distribution metrics.
+    """
+    print("=" * 70)
+    print("BACKFILLING DISTRIBUTION METRICS")
+    print("=" * 70)
+
+    registry = load_registry()
+    updated_count = 0
+
+    for race in registry["races"]:
+        race_id = race["id"]
+        race_name = race["name"]
+
+        print(f"\n{race_name} ({race_id}):")
+
+        # Collect all prediction files for this race
+        all_probs = []
+        new_rider_total = 0
+
+        for category, pred_path in race.get("predictions", {}).items():
+            full_path = config.PROJECT_ROOT / pred_path
+
+            if not full_path.exists():
+                print(f"  {category}: File not found: {pred_path}")
+                continue
+
+            pred_df = pd.read_csv(full_path)
+            print(f"  {category}: {len(pred_df)} riders")
+
+            # Collect probabilities
+            if 'Top-10 Probability' in pred_df.columns:
+                all_probs.extend(pred_df['Top-10 Probability'].dropna().tolist())
+
+            # Count new riders
+            if 'Status' in pred_df.columns:
+                new_rider_total += (pred_df['Status'] == 'new_rider').sum()
+
+        if not all_probs:
+            print(f"  No prediction data found")
+            continue
+
+        # Calculate combined distribution
+        probs = pd.Series(all_probs)
+
+        low_count = (probs < 0.30).sum()
+        mid_count = ((probs >= 0.30) & (probs <= 0.60)).sum()
+        high_count = (probs > 0.60).sum()
+        total = len(probs)
+
+        distribution = {
+            'low_pct': round(low_count / total * 100, 1),
+            'mid_pct': round(mid_count / total * 100, 1),
+            'high_pct': round(high_count / total * 100, 1),
+            'mean_prob': round(probs.mean(), 3),
+            'std_prob': round(probs.std(), 3),
+            'new_rider_count': int(new_rider_total),
+            'field_size': total
+        }
+
+        print(f"  Distribution: Low {distribution['low_pct']}% | Mid {distribution['mid_pct']}% | High {distribution['high_pct']}%")
+        print(f"  Mean prob: {distribution['mean_prob']:.1%} | Std: {distribution['std_prob']:.3f}")
+        print(f"  New riders: {distribution['new_rider_count']} | Field size: {distribution['field_size']}")
+
+        # Update registry
+        if "validation" not in race:
+            race["validation"] = {}
+        race["validation"]["distribution"] = distribution
+        updated_count += 1
+
+    # Save updated registry
+    save_registry(registry)
+    print(f"\n{'=' * 70}")
+    print(f"Updated {updated_count} races with distribution metrics")
+    print(f"{'=' * 70}")
+
+    return updated_count
+
+
+# ============================================================
 # VALIDATION PIPELINE
 # ============================================================
 
@@ -1268,6 +1825,25 @@ def validate(predictions_path: str, results_path: str, threshold: float = None):
     for _, row in false_pos.head(10).iterrows():
         print(f"  P{row['actual_place']:2d} - {row['rider']:30s} ({row['prob']:.1%})")
 
+    # Calculate distribution metrics from matched predictions
+    distribution = calculate_distribution_metrics(df)
+
+    if distribution:
+        print(f"\n📊 DISTRIBUTION ANALYSIS:")
+        print(f"  Low (<30%):   {distribution['low_pct']:.1f}% of field")
+        print(f"  Mid (30-60%): {distribution['mid_pct']:.1f}% of field")
+        print(f"  High (>60%):  {distribution['high_pct']:.1f}% of field")
+        print(f"  Mean prob:    {distribution['mean_prob']:.1%}")
+        print(f"  Field size:   {distribution['field_size']}")
+
+        # Interpret distribution pattern
+        if distribution['mid_pct'] < 10:
+            print(f"  Pattern: BIMODAL (decisive - model is confident)")
+        elif distribution['mid_pct'] > 20:
+            print(f"  Pattern: BALANCED (uncertain - more mid-tier riders)")
+        else:
+            print(f"  Pattern: MODERATE (typical distribution)")
+
     return {
         'recall': recall,
         'precision': precision,
@@ -1275,7 +1851,8 @@ def validate(predictions_path: str, results_path: str, threshold: float = None):
         'podium_accuracy': podium_accuracy,
         'matched': len(df),
         'predicted_top10': len(predicted_top10),
-        'actual_top10': len(actual_top10)
+        'actual_top10': len(actual_top10),
+        'distribution': distribution
     }
 
 
@@ -1376,6 +1953,15 @@ Examples:
     full_parser.add_argument('results', help='Path to results CSV')
     full_parser.add_argument('--predictions', help='Path to predictions CSV (for validation)')
 
+    # Backfill distribution command
+    backfill_parser = subparsers.add_parser('backfill-distribution', help='Calculate distribution metrics for all races')
+
+    # Update validation reports command
+    update_reports_parser = subparsers.add_parser('update-reports', help='Add distribution section to validation reports')
+
+    # Update prediction reports command
+    update_predictions_parser = subparsers.add_parser('update-predictions', help='Add distribution section to prediction reports')
+
     args = parser.parse_args()
 
     if args.command == 'predict':
@@ -1388,6 +1974,12 @@ Examples:
         validate(args.predictions, args.results, args.threshold)
     elif args.command == 'full':
         full_pipeline(args.results, args.predictions)
+    elif args.command == 'backfill-distribution':
+        backfill_distribution_metrics()
+    elif args.command == 'update-reports':
+        update_validation_reports_with_distribution()
+    elif args.command == 'update-predictions':
+        update_prediction_reports_with_distribution()
     else:
         parser.print_help()
 

@@ -181,6 +181,27 @@ For each rider, we calculate their historical win rate against the specific oppo
 
 ---
 
+## Probability Distribution Analysis
+
+| Metric           | Value | Interpretation        |
+|-----------------|-----:|----------------------|
+| Low (<30%)       | 84.3% | Non-contenders        |
+| Mid (30-60%)     |  0.8% | Uncertain zone        |
+| High (>60%)      | 14.9% | Likely contenders     |
+| Mean Probability | 16.3% | Average across field  |
+| Std Deviation    | 0.318 | Probability spread    |
+| New Riders       |     5 | No prior race history |
+| Field Size       |   121 | Total riders          |
+
+**Pattern:** BIMODAL
+- Model is decisive - clear separation between contenders and non-contenders
+
+**What this means:**
+- 84% of riders had <30% probability (clear non-contenders)
+- 1% in the uncertain 30-60% range
+- 15% were predicted >60% (likely Top-10)
+---
+
 ## Understanding the Metrics
 
 ### Top-10 Probability

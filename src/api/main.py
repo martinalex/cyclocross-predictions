@@ -20,13 +20,15 @@ from src.api.schemas import (
     RiderPrediction,
     HealthResponse
 )
+from src.features.builder import FeatureBuilder
+from src.features.names import standardize_name
 import config
 
 # Initialize FastAPI app
 app = FastAPI(
     title="VeloPredict API",
     description="AI-powered cyclocross race predictions with 90% Top-10 accuracy",
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -40,109 +42,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global model storage
+# Global storage
 models = {
     "top10": None,
     "top3": None,
     "metadata": None,
-    "historical_data": None
+    "feature_builder": None
 }
-
-
-def normalize_name(name: str) -> str:
-    """Normalize rider name for matching"""
-    if pd.isna(name):
-        return ""
-    name = str(name).strip().lower()
-    name = (
-        name.replace("é", "e").replace("è", "e").replace("ë", "e")
-            .replace("ó", "o").replace("ò", "o").replace("ö", "o")
-            .replace("á", "a").replace("à", "a").replace("ä", "a")
-            .replace("ü", "u").replace("ï", "i").replace("ř", "r")
-            .replace("ž", "z").replace("š", "s").replace("č", "c")
-    )
-    return name
-
-
-def get_rider_features(rider_name: str, historical_data: pd.DataFrame, category: str = "Men Elite"):
-    """Get latest features for a rider from historical data"""
-    norm_name = normalize_name(rider_name)
-    historical_data["rider_name_norm"] = historical_data["rider_name"].apply(normalize_name)
-
-    # Try different name formats
-    parts = norm_name.split()
-    if len(parts) >= 2:
-        reversed_name = f"{parts[-1]} {' '.join(parts[:-1])}"
-    else:
-        reversed_name = norm_name
-
-    # Find rider's most recent race
-    rider_history = historical_data[
-        (
-            (historical_data["rider_name_norm"] == norm_name) |
-            (historical_data["rider_name_norm"] == reversed_name)
-        ) &
-        (historical_data["Category Name"].str.contains(category.split()[0], case=False, na=False))
-    ].sort_values("race_date", ascending=False)
-
-    if len(rider_history) > 0:
-        latest = rider_history.iloc[0]
-        features = {
-            "uci_points_normalized": latest["uci_points_normalized"],
-            "races_so_far": latest["races_so_far"] + 1,
-            "avg_place_last3": latest["avg_place_last3"],
-            "best_place_last5": latest["best_place_last5"],
-            "last_place": latest["Place"],
-            "days_since_last_race": 7,
-            "last_carried_points": latest["Carried Points"],
-            "last_scored_points": latest["Scored Points"],
-            "top3_rate_career": latest["top3_rate_career"],
-            "top10_rate_career": latest["top10_rate_career"],
-            "series_appearances": 0,
-            "is_elite": 1 if "Elite" in category else 0,
-            "is_women": 1 if "Women" in category else 0,
-            "points_tier": latest["points_tier"],
-            "team_tier": latest["team_tier"]
-        }
-        return features, "found"
-    else:
-        # New rider - UCI-based inference
-        uci_match = historical_data[
-            (historical_data["rider_name_norm"] == norm_name) |
-            (historical_data["rider_name_norm"] == reversed_name)
-        ]
-
-        uci_points_norm = uci_match.iloc[0]["uci_points_normalized"] if len(uci_match) > 0 else 0.1
-
-        if uci_points_norm > 0:
-            inferred_place = config.UCI_PLACE_INTERCEPT + config.UCI_PLACE_SLOPE * uci_points_norm
-            inferred_place = max(5, min(70, inferred_place))
-        else:
-            inferred_place = config.MEDIAN_PLACE_DEFAULT
-
-        features = {
-            "uci_points_normalized": uci_points_norm,
-            "races_so_far": 0,
-            "avg_place_last3": inferred_place,
-            "best_place_last5": inferred_place,
-            "last_place": inferred_place,
-            "days_since_last_race": 14,
-            "last_carried_points": 0,
-            "last_scored_points": 0,
-            "top3_rate_career": 0,
-            "top10_rate_career": 0,
-            "series_appearances": 0,
-            "is_elite": 1 if "Elite" in category else 0,
-            "is_women": 1 if "Women" in category else 0,
-            "points_tier": "low",
-            "team_tier": "no_team"
-        }
-        return features, "new_rider"
 
 
 @app.on_event("startup")
 async def load_models():
-    """Load models on startup"""
+    """Load models and initialize FeatureBuilder on startup"""
     try:
         models["top10"] = joblib.load(config.TOP10_MODEL)
         models["top3"] = joblib.load(config.TOP3_MODEL)
@@ -150,17 +61,16 @@ async def load_models():
         with open(config.MODEL_METADATA, 'r') as f:
             models["metadata"] = json.load(f)
 
-        models["historical_data"] = pd.read_csv(
-            config.RESULTS_WITH_FEATURES,
-            parse_dates=["race_date"]
-        )
+        # Initialize unified FeatureBuilder (includes H2H)
+        models["feature_builder"] = FeatureBuilder(load_h2h=True)
 
-        print("✅ Models loaded successfully")
+        print("Models loaded successfully")
         print(f"   Top-10 accuracy: {models['metadata']['top10_accuracy']*100:.1f}%")
         print(f"   Calibration: {models['metadata']['calibration_method']}")
+        print(f"   H2H matrix: loaded")
 
     except Exception as e:
-        print(f"❌ Error loading models: {e}")
+        print(f"Error loading models: {e}")
         raise
 
 
@@ -169,9 +79,10 @@ async def root():
     """Root endpoint with API info"""
     return {
         "name": "VeloPredict API",
-        "version": "1.0.0",
-        "description": "AI-powered cyclocross race predictions",
+        "version": "2.0.0",
+        "description": "AI-powered cyclocross race predictions with H2H analysis",
         "accuracy": "90% Top-10 (validated at Tabor UCI World Cup)",
+        "features": ["H2H analysis", "New rider discount", "DNS filtering"],
         "endpoints": {
             "docs": "/docs",
             "health": "/health",
@@ -196,44 +107,61 @@ async def predict_race(request: PredictionRequest):
     """
     Predict Top-10 finishers for a cyclocross race
 
-    - **riders**: List of riders with names (required), UCI points, and teams (optional)
+    - **riders**: List of riders with names (required), UCI rank (optional)
     - **category**: Race category (default: "Men Elite")
-    - **confidence_threshold**: Minimum probability for Top-10 prediction (default: 0.55)
+    - **confidence_threshold**: Minimum probability for Top-10 prediction (default from config)
+    - **enable_dns_filter**: Filter riders unlikely to start (default: True)
+    - **enable_new_rider_discount**: Apply discount to new riders (default: True)
 
-    Returns predictions with probabilities, confidence levels, and podium forecast.
+    Returns predictions with probabilities, H2H scores, confidence levels, and podium forecast.
     """
     if models["top10"] is None:
         raise HTTPException(status_code=503, detail="Models not loaded")
 
+    builder: FeatureBuilder = models["feature_builder"]
+    threshold = request.confidence_threshold or config.CONFIDENCE_THRESHOLD
+
+    # Build field list for H2H calculations
+    field_names = [r.rider_name for r in request.riders]
+
     predictions = []
 
     for rider_input in request.riders:
-        # Get features
-        features, status = get_rider_features(
+        # Get features using unified FeatureBuilder
+        rider_features = builder.get_rider_features(
             rider_input.rider_name,
-            models["historical_data"],
-            request.category
+            request.category,
+            startlist_uci_rank=rider_input.uci_rank
         )
 
-        # Prepare feature vector
-        X = pd.DataFrame([features])
-        X = pd.get_dummies(X, columns=["points_tier", "team_tier"], drop_first=True)
+        # Add H2H features
+        builder.add_h2h_features(rider_features, rider_input.rider_name, field_names)
 
-        # Align with training features
-        for feat in models["metadata"]["features"]:
-            if feat not in X.columns:
-                X[feat] = 0
-        X = X[models["metadata"]["features"]]
-
-        # Fill any remaining NaN
-        X = X.fillna(config.FILL_VALUES)
+        # Prepare model input (handles alignment and NaN filling)
+        X = builder.prepare_model_input(rider_features)
 
         # Predict with calibrated models
-        top10_prob = models["top10"].predict_proba(X)[0][1]
-        top3_prob = models["top3"].predict_proba(X)[0][1]
+        top10_prob = float(models["top10"].predict_proba(X)[0][1])
+        top3_prob = float(models["top3"].predict_proba(X)[0][1])
+
+        # Apply new rider discount (v6 feature)
+        if request.enable_new_rider_discount and rider_features.is_new_rider:
+            top10_prob *= config.NEW_RIDER_DISCOUNT
+            top3_prob *= config.NEW_RIDER_DISCOUNT
+
+        # Check DNS risk
+        dns_risk = False
+        dns_reason = ""
+        if request.enable_dns_filter:
+            dns_risk, dns_reason = builder.check_dns_risk(rider_features)
 
         # Determine prediction
-        predicted_finish = "Top-10" if top10_prob > request.confidence_threshold else "Outside Top-10"
+        if dns_risk:
+            predicted_finish = "DNS Risk"
+        elif top10_prob > threshold:
+            predicted_finish = "Top-10"
+        else:
+            predicted_finish = "Outside Top-10"
 
         # Confidence level
         if top10_prob > 0.7:
@@ -243,36 +171,104 @@ async def predict_race(request: PredictionRequest):
         else:
             confidence = "LOW"
 
+        # Get H2H score for response
+        h2h_score = rider_features.features.get("h2h_field_score", 0.5)
+        h2h_confidence = getattr(rider_features, 'h2h_confidence', 0.0)
+
         predictions.append(RiderPrediction(
             rider=rider_input.rider_name,
             top10_probability=round(top10_prob, 4),
             top3_probability=round(top3_prob, 4),
             predicted_finish=predicted_finish,
             confidence=confidence,
-            recent_form=features.get("avg_place_last3"),
-            career_top10_rate=features.get("top10_rate_career")
+            h2h_field_score=round(h2h_score, 4),
+            h2h_confidence=round(h2h_confidence, 4),
+            is_new_rider=rider_features.is_new_rider,
+            dns_risk=dns_risk,
+            dns_reason=dns_reason if dns_risk else None,
+            recent_form=rider_features.features.get("avg_place_last3"),
+            career_top10_rate=rider_features.features.get("top10_rate_career")
         ))
 
     # Sort by Top-10 probability
     predictions_sorted = sorted(predictions, key=lambda x: x.top10_probability, reverse=True)
 
-    # Get Top-10 predictions
+    # Get Top-10 predictions (excluding DNS risks)
     predicted_top10 = [
         p.rider for p in predictions_sorted
-        if p.top10_probability > request.confidence_threshold
+        if p.top10_probability > threshold and not p.dns_risk
     ]
 
-    # Get podium predictions (top 3 by Top-3 probability)
-    podium_sorted = sorted(predictions, key=lambda x: x.top3_probability, reverse=True)
+    # Get podium predictions (top 3 by Top-3 probability, excluding DNS and requiring threshold)
+    podium_candidates = [
+        p for p in predictions_sorted
+        if not p.dns_risk and p.top3_probability >= config.PODIUM_THRESHOLD
+    ]
+    podium_sorted = sorted(podium_candidates, key=lambda x: x.top3_probability, reverse=True)
     predicted_podium = [p.rider for p in podium_sorted[:3]]
 
     return PredictionResponse(
         predictions=predictions_sorted,
         predicted_top10=predicted_top10,
         predicted_podium=predicted_podium,
-        model_version="v4-calibrated",
-        calibration_method=models["metadata"]["calibration_method"]
+        model_version="v6-unified",
+        calibration_method=models["metadata"]["calibration_method"],
+        confidence_threshold=threshold
     )
+
+
+@app.post("/predict/narrative")
+async def predict_with_narrative(request: PredictionRequest, race_name: str = "Race"):
+    """
+    Predict Top-10 finishers with LLM-generated narrative analysis.
+
+    Same as /predict but includes AI-generated race preview and rider insights.
+    Requires ANTHROPIC_API_KEY environment variable.
+    """
+    # First get standard predictions
+    prediction_response = await predict_race(request)
+
+    # Convert to DataFrame for narrative generation
+    predictions_data = []
+    for p in prediction_response.predictions:
+        predictions_data.append({
+            "Rider": p.rider,
+            "Top-10 Probability": p.top10_probability,
+            "Top-3 Probability": p.top3_probability,
+            "H2H Field Score": p.h2h_field_score,
+            "H2H Confidence": p.h2h_confidence,
+            "Recent Form": p.recent_form or 25,
+            "Career Top-10 Rate": p.career_top10_rate or 0,
+            "Status": "new_rider" if p.is_new_rider else "found"
+        })
+
+    df = pd.DataFrame(predictions_data)
+
+    try:
+        from src.llm.narratives import explain_predictions
+        narratives = explain_predictions(df, race_name)
+
+        return {
+            "predictions": prediction_response.predictions,
+            "predicted_top10": prediction_response.predicted_top10,
+            "predicted_podium": prediction_response.predicted_podium,
+            "model_version": prediction_response.model_version,
+            "narrative": {
+                "race_preview": narratives["race_preview"],
+                "podium_prediction": narratives["podium_prediction"],
+                "top_insights": narratives["top_insights"]
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"LLM not configured: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Narrative generation failed: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

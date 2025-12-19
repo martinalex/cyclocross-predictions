@@ -179,3 +179,25 @@ After the race:
 **Men predicted Top-10:** 13 riders
 **Women predicted Top-10:** 20 riders (6 new riders)
 **DNS risks flagged:** 4 total (3 men, 1 women)
+
+---
+
+## Probability Distribution Analysis
+
+| Metric           | Value | Interpretation        |
+|-----------------|-----:|----------------------|
+| Low (<30%)       | 50.5% | Non-contenders        |
+| Mid (30-60%)     | 17.2% | Uncertain zone        |
+| High (>60%)      | 32.3% | Likely contenders     |
+| Mean Probability | 37.7% | Average across field  |
+| Std Deviation    | 0.315 | Probability spread    |
+| New Riders       |     6 | No prior race history |
+| Field Size       |    93 | Total riders          |
+
+**Pattern:** MODERATE
+- Typical distribution with clear favorites and some uncertainty
+
+**What this means:**
+- 50% of riders had <30% probability (clear non-contenders)
+- 17% in the uncertain 30-60% range
+- 32% were predicted >60% (likely Top-10)

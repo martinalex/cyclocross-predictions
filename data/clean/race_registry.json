@@ -14,6 +14,21 @@
       "results": {
         "Men Elite": "data/results/Results__UCI-World-Cup__Tabor__Men-Elite__2025-11-23__Tabor-CZECHIA.csv",
         "Women Elite": "data/results/Results__UCI-World-Cup__Tabor__Women-Elite__2025-11-23__Tabor-CZECHIA.csv"
+      },
+      "validation": {
+        "precision": 42,
+        "recall": 90,
+        "high_conf_accuracy": null,
+        "notes": "First test - over-predicted",
+        "distribution": {
+          "low_pct": 46.5,
+          "mid_pct": 19.3,
+          "high_pct": 34.2,
+          "mean_prob": 0.384,
+          "std_prob": 0.328,
+          "new_rider_count": 13,
+          "field_size": 114
+        }
       }
     },
     {
@@ -30,6 +45,21 @@
       "results": {
         "Men Elite": "data/results/Results__UCI-World-Cup__Flamanville__Men-Elite__2025-11-30__Flamanville-FRANCE.csv",
         "Women Elite": "data/results/Results__UCI-World-Cup__Flamanville__Women-Elite__2025-11-30__Flamanville-FRANCE.csv"
+      },
+      "validation": {
+        "precision": 48,
+        "recall": 80,
+        "high_conf_accuracy": null,
+        "notes": "New rider false positives",
+        "distribution": {
+          "low_pct": 50.5,
+          "mid_pct": 17.2,
+          "high_pct": 32.3,
+          "mean_prob": 0.377,
+          "std_prob": 0.315,
+          "new_rider_count": 6,
+          "field_size": 93
+        }
       }
     },
     {
@@ -46,6 +76,52 @@
       "results": {
         "Men Elite": "data/results/Results__UCI-World-Cup__Sardinia__Men-Elite__2025-12-07__Sardinia-ITALY.csv",
         "Women Elite": "data/results/Results__UCI-World-Cup__Sardinia__Women-Elite__2025-12-07__Sardinia-ITALY.csv"
+      },
+      "validation": {
+        "precision": 100,
+        "recall": 100,
+        "high_conf_accuracy": 100,
+        "notes": "7/7 high-conf correct",
+        "distribution": {
+          "low_pct": 75.4,
+          "mid_pct": 13.0,
+          "high_pct": 11.6,
+          "mean_prob": 0.2,
+          "std_prob": 0.277,
+          "new_rider_count": 8,
+          "field_size": 69
+        }
+      }
+    },
+    {
+      "id": "kortrijk_2025-12-13",
+      "name": "Kortrijk",
+      "date": "2025-12-13",
+      "series": "Exact Cross",
+      "version": "v6.2",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_exact-cross-kortrijk_men_elite_20251212_1632.csv",
+        "Women Elite": "data/clean/predictions_exact-cross-kortrijk_women_elite_20251212_1632.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__Exact-Cross__ Kortrijk__Men-Elite__2025-12-13__ Kortrijk -BELGIUM.csv",
+        "Women Elite": "data/results/Results__Exact-Cross__ Kortrijk__Women-Elite__2025-12-13__ Kortrijk -BELGIUM.csv"
+      },
+      "validation": {
+        "precision": 87.5,
+        "recall": 35,
+        "high_conf_accuracy": null,
+        "notes": "B-tier race",
+        "distribution": {
+          "low_pct": 88.2,
+          "mid_pct": 2.4,
+          "high_pct": 9.4,
+          "mean_prob": 0.118,
+          "std_prob": 0.268,
+          "new_rider_count": 4,
+          "field_size": 85
+        }
       }
     },
     {
@@ -53,13 +129,31 @@
       "name": "Namur",
       "date": "2025-12-14",
       "series": "UCI World Cup",
-      "version": "v6",
+      "version": "v6.1",
       "threshold": 0.55,
       "predictions": {
         "Men Elite": "data/clean/predictions_namur_men_elite_20251211_0551.csv",
         "Women Elite": "data/clean/predictions_namur_women_elite_20251211_0551.csv"
       },
-      "results": {}
+      "results": {
+        "Men Elite": "data/results/Results__UCI-WorldCup__ Namur__Men-Elite__2025-12-14__ Namur -BELGIUM.csv",
+        "Women Elite": "data/results/Results__UCI-WorldCup__ Namur__Women-Elite__2025-12-14__ Namur -BELGIUM.csv"
+      },
+      "validation": {
+        "precision": 75,
+        "recall": 60,
+        "high_conf_accuracy": 80,
+        "notes": "Belgian depth, NEFF surprise",
+        "distribution": {
+          "low_pct": 84.3,
+          "mid_pct": 0.8,
+          "high_pct": 14.9,
+          "mean_prob": 0.163,
+          "std_prob": 0.318,
+          "new_rider_count": 5,
+          "field_size": 121
+        }
+      }
     }
   ],
   "model_versions": [
@@ -104,7 +198,28 @@
       "auc": 0.835,
       "observations": 8357,
       "innovation": "+New Rider"
+    },
+    {
+      "version": "v6.2",
+      "accuracy": 83.4,
+      "auc": 0.85,
+      "observations": 8849,
+      "innovation": "No DNS Exclusion"
+    },
+    {
+      "version": "v6.3",
+      "accuracy": 82.6,
+      "auc": 0.833,
+      "observations": 8950,
+      "innovation": "+Namur Results"
+    },
+    {
+      "version": "v6.4",
+      "accuracy": 82.6,
+      "auc": 0.833,
+      "observations": 8950,
+      "innovation": "Robust Feature Extraction"
     }
   ],
-  "current_version": "v6"
+  "current_version": "v6.4"
 }

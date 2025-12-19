@@ -8,11 +8,12 @@ VeloPredict achieved **90% Top-10 accuracy** across both Men and Women Elite rac
 
 ## 📊 Overall Performance
 
-| Metric | Men Elite | Women Elite | **Combined** |
-|--------|-----------|-------------|--------------|
-| **Top-10 Accuracy** | 90.0% (9/10) | 90.0% (9/10) | **90.0% (18/20)** |
-| Precision | 47.4% (9/19) | 37.5% (9/24) | 41.9% (18/43) |
-| Podium Accuracy | 33.3% (1/3) | 0.0% (0/3) | 16.7% (1/6) |
+| Metric              | Men Elite     | Women Elite   | **Combined** |
+|--------|------------|---------------|-------------- |
+| **Top-10 Accuracy** | 90.0% (9/10)  | 90.0% (9/10)  | **90.0% (18/20)** |
+
+| Precision           | 47.4% (9/19)  | 37.5% (9/24)  | 41.9% (18/43) |
+| Podium Accuracy     | 33.3% (1/3)   | 0.0% (0/3)    | 16.7% (1/6) |
 
 **Key Finding:** Model correctly predicted 18 out of 20 Top-10 finishers across both races.
 
@@ -270,3 +271,25 @@ From NEXT_STEPS.md Week 1 goals:
 **Confidence Level:** High for Top-10, Low for podium ordering.
 
 **Portfolio Status:** ✅ Ready to show consulting firms - demonstrates ML skills, honest evaluation, and iterative improvement mindset.
+
+---
+
+## Probability Distribution Analysis
+
+| Metric           | Value | Interpretation        |
+|-----------------|-----:|----------------------|
+| Low (<30%)       | 46.5% | Non-contenders        |
+| Mid (30-60%)     | 19.3% | Uncertain zone        |
+| High (>60%)      | 34.2% | Likely contenders     |
+| Mean Probability | 38.4% | Average across field  |
+| Std Deviation    | 0.328 | Probability spread    |
+| New Riders       |    13 | No prior race history |
+| Field Size       |   114 | Total riders          |
+
+**Pattern:** MODERATE
+- Typical distribution with clear favorites and some uncertainty
+
+**What this means:**
+- 46% of riders had <30% probability (clear non-contenders)
+- 19% in the uncertain 30-60% range
+- 34% were predicted >60% (likely Top-10)

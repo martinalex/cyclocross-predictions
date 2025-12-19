@@ -29,7 +29,7 @@ def predict_race(
     category="Men Elite",
     output_path=None,
     confidence_threshold=None,
-    enable_dns_filter=True
+    enable_dns_filter=False
 ):
     """Generate predictions for a race
 
@@ -38,7 +38,7 @@ def predict_race(
         category: Race category (e.g., "Men Elite")
         output_path: Where to save predictions
         confidence_threshold: Minimum probability to predict Top-10 (default from config)
-        enable_dns_filter: Filter riders unlikely to start (default: True)
+        enable_dns_filter: DEPRECATED - DNS filter disabled by default (was causing false flags on elite riders)
     """
     # Use config default if not specified
     if confidence_threshold is None:

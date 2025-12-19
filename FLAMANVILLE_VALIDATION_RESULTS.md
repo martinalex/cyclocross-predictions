@@ -11,22 +11,27 @@ VeloPredict v2 showed **mixed results** at Flamanville:
 
 ---
 
+
+
 ## 📊 Overall Performance
 
-| Category | Top-10 Accuracy | Precision | Podium Accuracy | vs Tabor (v1) |
-|----------|----------------|-----------|-----------------|---------------|
-| **Men Elite** | 70.0% (7/10) | 53.8% (7/13) | 33.3% (1/3) | **-20.0%** ❌ |
-| **Women Elite** | 90.0% (9/10) | 45.0% (9/20) | 33.3% (1/3) | **+0.0%** ✅ |
-| **Combined** | 80.0% (16/20) | 48.5% (16/33) | 33.3% (2/6) | **-10.0%** |
+| Category        | Top-10 Accuracy | Precision       | Podium Accuracy | vs Tabor (v1) |
+|-----------------|-----------------|-----------------|-----------------|---------------|
+| **Men Elite**   | 70.0% (7/10)    | 53.8% (7/13)    | 33.3% (1/3)     | **-20.0%** ❌ |
+| **Women Elite** | 90.0% (9/10)    | 45.0% (9/20)    | 33.3% (1/3)     | **+0.0%** ✅  |
+| **Combined**    | 80.0% (16/20)   | 48.5% (16/33)   | 33.3% (2/6)     | **-10.0%**❌  |
+
+
+
 
 ### Comparison: v1 (Tabor) vs v2 (Flamanville)
 
-| Metric | Tabor v1 | Flamanville v2 | Change | Goal |
-|--------|----------|----------------|--------|------|
-| **Predicted Top-10 count** | 19-24 | 13-20 | ✅ **Reduced** | 12-15 |
-| **Precision** | 42-47% | 45-54% | ✅ **+3-7%** | 60% |
-| **Top-10 Accuracy** | 90% | 70-90% | ⚠️ **Inconsistent** | 85-90% |
-| **DNS in predictions** | 2 (podium) | 6 (Top-10) | ❌ **Worse** | 0 |
+| Metric                      | Tabor v1        | Flamanville v2  | Change                | Goal |
+|-----------------------------|-----------------|-----------------|-----------------------|------|
+| **Predicted Top-10 count**  | 19-24           | 13-20           | ✅ **Reduced**        | 12-15 |
+| **Precision**               | 42-47%          | 45-54%          | ✅ **+3-7%**          | 60% |
+| **Top-10 Accuracy**         | 90%             | 70-90%          | ⚠️ **Inconsistent**   | 85-90% |
+| **DNS in predictions**      | 2 (podium)      | 6 (Top-10)      | ❌ **Worse**          | 0 |
 
 ---
 
@@ -90,6 +95,8 @@ VeloPredict v2 showed **mixed results** at Flamanville:
 ### ❌ Missed Predictions (1/10 = 10%)
 1. **MOORS Fleur (P10)** - Predicted 52.2% (below 55% threshold)
 
+
+
 ### ⚠️ False Positives (11/20 = 55%)
 1. **EYEINGTON Joy Kacey** - DNS (new rider, predicted 86.3%)
 2. **INGLIS Theodora Hope** - DNS (new rider, predicted 86.3% for podium!)
@@ -102,6 +109,8 @@ VeloPredict v2 showed **mixed results** at Flamanville:
 9. **CUSACK Lidia** - Finished P15 (predicted 78.4%)
 10. **DESPREZ Lison** - Finished P25 (predicted 58.6%)
 11. **WORST Annemarie** - DNF (predicted 78.3%)
+
+
 
 ### 🔍 Key Insights - Women Elite
 
@@ -371,3 +380,25 @@ VeloPredict v2 showed **mixed results** at Flamanville:
 **Confidence Level:** Medium for Top-10, Low for podium, Critical need for new rider handling.
 
 **Portfolio Status:** ✅ Shows iterative improvement and honest evaluation - valuable for consulting interviews.
+
+---
+
+## Probability Distribution Analysis
+
+| Metric           | Value | Interpretation        |
+|-----------------|-----:|----------------------|
+| Low (<30%)       | 50.5% | Non-contenders        |
+| Mid (30-60%)     | 17.2% | Uncertain zone        |
+| High (>60%)      | 32.3% | Likely contenders     |
+| Mean Probability | 37.7% | Average across field  |
+| Std Deviation    | 0.315 | Probability spread    |
+| New Riders       |     6 | No prior race history |
+| Field Size       |    93 | Total riders          |
+
+**Pattern:** MODERATE
+- Typical distribution with clear favorites and some uncertainty
+
+**What this means:**
+- 50% of riders had <30% probability (clear non-contenders)
+- 17% in the uncertain 30-60% range
+- 32% were predicted >60% (likely Top-10)

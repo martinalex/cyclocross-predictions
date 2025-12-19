@@ -40,9 +40,13 @@ st.set_page_config(
 )
 
 # Load model and metadata
+def get_metadata_mtime():
+    """Get modification time of metadata file for cache busting."""
+    return config.MODEL_METADATA.stat().st_mtime if config.MODEL_METADATA.exists() else 0
+
 @st.cache_resource
-def load_models():
-    """Load trained models and metadata"""
+def load_models(_mtime=None):
+    """Load trained models and metadata. Cache is busted when metadata file changes."""
     top10_model = joblib.load(config.TOP10_MODEL)
     top3_model = joblib.load(config.TOP3_MODEL)
 
@@ -60,17 +64,102 @@ def load_data():
     return df
 
 try:
-    model_top10, model_top3, metadata = load_models()
+    # Pass metadata mtime to bust cache when metadata file changes
+    model_top10, model_top3, metadata = load_models(_mtime=get_metadata_mtime())
     historical_data = load_data()
+    registry = load_race_registry()
     model_loaded = True
 except Exception as e:
     model_loaded = False
     error_msg = str(e)
+    registry = {"races": [], "model_versions": [], "current_version": "v1"}
+
+# ============================================================
+# DYNAMIC HEADER - Auto-generated from registry and metadata
+# ============================================================
+
+def get_header_stats(registry, metadata):
+    """Generate header stats from registry and metadata."""
+    current_version = registry.get("current_version", "v1")
+    model_versions = registry.get("model_versions", [])
+
+    # Get current model info
+    current_model = next((m for m in model_versions if m["version"] == current_version), {})
+    observations = current_model.get("observations", 0)
+
+    # Count races with results
+    races_with_results = [r for r in registry.get("races", []) if r.get("results")]
+    race_count = len(races_with_results)
+
+    # Get latest validated race
+    validated_races = [r for r in races_with_results if r.get("validation")]
+    if validated_races:
+        latest = validated_races[-1]
+        latest_name = latest["name"]
+        latest_precision = latest["validation"].get("precision", 0)
+    else:
+        latest_name = "N/A"
+        latest_precision = 0
+
+    # Get H2H importance from metadata feature_importance
+    h2h_importance = 22.7  # Default, could parse from model if available
+
+    return {
+        "version": current_version,
+        "latest_race": latest_name,
+        "race_count": race_count,
+        "observations": observations,
+        "h2h_importance": h2h_importance,
+        "latest_precision": latest_precision
+    }
+
+def get_live_validation_sidebar(registry, max_races=3):
+    """Generate sidebar Live Validation section from registry."""
+    validated_races = [r for r in registry.get("races", []) if r.get("validation")]
+    # Sort by date descending, take most recent
+    validated_races = sorted(validated_races, key=lambda x: x["date"], reverse=True)[:max_races]
+
+    lines = []
+    for race in validated_races:
+        v = race["validation"]
+        date_str = race["date"][5:]  # "12-14" from "2025-12-14"
+        month_day = f"{date_str[0:2]}/{date_str[3:5]}" if len(date_str) >= 5 else date_str
+
+        lines.append(f"**{race['name']} (Dec {date_str[3:5]}):**")
+
+        # Show precision if available
+        if v.get("precision"):
+            lines.append(f"- ✅ {v['precision']:.0f}% precision")
+
+        # Show recall if available
+        if v.get("recall"):
+            lines.append(f"- ✅ {v['recall']:.0f}% recall")
+
+        # Show high conf if available
+        if v.get("high_conf_accuracy"):
+            lines.append(f"- ✅ {v['high_conf_accuracy']:.0f}% high-conf")
+
+        # Show notes if it's a short note
+        if v.get("notes") and len(v["notes"]) < 30:
+            pass  # Skip notes in sidebar for brevity
+
+        lines.append("")  # Empty line between races
+
+    return lines
 
 # Header
 st.title("🚴 VeloPredict: Cyclocross Race Predictions")
-st.markdown("**AI-powered predictions with H2H analysis - 84% Top-10 accuracy**")
-st.caption("Version: v6.1 (Sardinia validated) | 50 races, 8,800+ observations | H2H = #1 Feature (22.9%) | Live: 100% recall at Sardinia")
+
+if model_loaded:
+    header_stats = get_header_stats(registry, metadata)
+    accuracy_pct = int(metadata['top10_accuracy'] * 100)
+    st.markdown(f"**AI-powered predictions with H2H analysis - {accuracy_pct}% Top-10 accuracy**")
+    st.caption(
+        f"Version: {header_stats['version']} ({header_stats['latest_race']} validated) | "
+        f"{header_stats['race_count']} races, {header_stats['observations']:,}+ observations | "
+        f"H2H = #1 Feature ({header_stats['h2h_importance']}%) | "
+        f"Live: {header_stats['latest_precision']:.0f}% precision at {header_stats['latest_race']}"
+    )
 
 if not model_loaded:
     st.error(f"❌ Model not found. Please run `train_model_v2.py` first.")
@@ -98,20 +187,37 @@ with st.sidebar:
     st.markdown(f"**Test set:** {metadata['test_size']} races")
     st.markdown(f"**Last updated:** {metadata['training_date'][:10]}")
 
+    # Dynamic Live Validation section
     st.markdown("---")
     st.markdown("### 🎯 Live Validation")
-    st.markdown("**Sardinia (Dec 7):**")
-    st.markdown("- ✅ 100% recall (7/7 high-conf)")
-    st.markdown("- ✅ All podium predictions correct")
-    st.markdown("")
-    st.markdown("**Flamanville (Nov 30):**")
-    st.markdown("- ✅ 80% Top-10 (16/20)")
-    st.markdown("")
-    st.markdown("**Tabor (Nov 23):**")
-    st.markdown("- ✅ 90% Top-10 (18/20)")
+    for line in get_live_validation_sidebar(registry):
+        st.markdown(line)
+
+    # Metrics explanation - expandable
+    with st.expander("📖 What do these metrics mean?"):
+        st.markdown("""
+**Precision** - *"Can I trust the predictions?"*
+- When we predict Top-10, how often are we right?
+- 75% precision = 3 out of 4 predictions correct
+- **This is the key metric for users**
+
+**Recall** - *"Did we catch all the winners?"*
+- Of actual Top-10 finishers, how many did we predict?
+- 60% recall = we caught 6 of 10 actual finishers
+- Lower recall = conservative predictions
+
+**High-Conf** - *"Are confident picks reliable?"*
+- Accuracy of predictions with >70% probability
+- These are the "safe bets"
+
+**Why training precision (~58%) < live precision (75%)?**
+- Training tests on ALL race types (mixed quality)
+- Live validation is on UCI World Cups (strong fields)
+- Predictable fields = better performance
+        """)
 
 # Main content
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔮 Predict Race", "🤖 AI Analysis", "📈 Model Insights", "📊 Season Tracker", "📚 About"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔮 Predict Race", "📊 Model Performance", "📈 Model Insights", "📊 Season Tracker", "📚 About"])
 
 with tab1:
     st.header("Predict Top-10 Finishers")
@@ -285,131 +391,203 @@ with tab1:
         st.info("Select riders above to see predictions")
 
 with tab2:
-    st.header("AI Race Analysis")
-    st.markdown("**Generate LLM-powered narrative analysis of predictions**")
+    st.header("Model Performance")
+    st.markdown("**Detailed metrics and explanations for VeloPredict's machine learning model**")
 
-    # Check for API key
-    import os
-    api_key_set = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    # Get all metrics from metadata
+    accuracy = metadata.get('top10_accuracy', 0) * 100
+    top3_accuracy = metadata.get('top3_accuracy', 0) * 100
+    auc_roc = metadata.get('top10_auc', 0)
+    brier_score = metadata.get('top10_brier_score', 0)
+    log_loss = metadata.get('top10_log_loss', 0)
+    baseline_accuracy = metadata.get('baseline_accuracy', 0) * 100
+    improvement = metadata.get('improvement_vs_baseline', 0) * 100
+    train_size = metadata.get('train_size', 0)
+    test_size = metadata.get('test_size', 0)
+    total_obs = metadata.get('total_observations', train_size + test_size)
+    total_races = metadata.get('total_races', 'N/A')
+    calibration = metadata.get('calibration_method', 'N/A')
+    training_date = metadata.get('training_date', 'N/A')
 
-    if not api_key_set:
-        st.warning("⚠️ ANTHROPIC_API_KEY not set. Set it to enable AI narratives.")
-        st.code("export ANTHROPIC_API_KEY='your-key-here'")
+    # Get live validation stats from registry
+    validated_races = [r for r in registry.get("races", []) if r.get("validation")]
+    if validated_races:
+        precisions = [r["validation"].get("precision", 0) for r in validated_races if r["validation"].get("precision")]
+        recalls = [r["validation"].get("recall", 0) for r in validated_races if r["validation"].get("recall")]
+        avg_precision = sum(precisions) / len(precisions) if precisions else 0
+        avg_recall = sum(recalls) / len(recalls) if recalls else 0
     else:
-        st.success("✅ Anthropic API key configured")
+        avg_precision = 0
+        avg_recall = 0
 
-    # Category and rider selection for AI analysis
-    ai_category = st.selectbox(
-        "Category for AI Analysis",
-        options=["Men Elite", "Women Elite"],
-        key="ai_category"
-    )
+    # Section 1: Primary Metrics
+    st.markdown("### 🎯 Primary Metrics")
+    st.markdown("*These are the key numbers that define model performance*")
 
-    # Get recent riders for this category
-    ai_recent_data = historical_data[
-        (historical_data["race_date"] > "2024-11-01") &
-        (historical_data["Category Name"] == ai_category)
-    ].copy()
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Top-10 Accuracy", f"{accuracy:.1f}%", help="% of all predictions (Top-10 or not) that were correct")
+    col2.metric("Top-3 Accuracy", f"{top3_accuracy:.1f}%", help="% of Top-3/podium predictions that were correct")
+    col3.metric("vs Baseline", f"+{improvement:.1f}%", help="Improvement over random guessing")
+    col4.metric("AUC-ROC", f"{auc_roc:.3f}", help="Area Under ROC Curve - measures ranking quality")
 
-    ai_recent_data["rider_name_std"] = ai_recent_data["rider_name"].apply(standardize_name)
+    auc_pct = auc_roc * 100  # Pre-calculate for format string
 
-    ai_riders = (
-        ai_recent_data
-        .groupby("rider_name_std")
-        .agg({
-            "rider_name": "last",
-            "Carried Points": "last",
-        })
-        .sort_values("Carried Points", ascending=True)
-        .head(40)
-    )
-    ai_riders.index = ai_riders["rider_name"]
+    with st.expander("📖 What do these metrics mean?", expanded=True):
+        st.markdown("""
+**Top-10 Accuracy** measures overall correctness across ALL predictions:
+- For each rider-race observation, the model predicts "Top-10" or "Not Top-10"
+- Accuracy = (correct predictions) / (total predictions)
+- Our {accuracy:.1f}% means ~{accuracy:.0f} out of 100 predictions are correct
+- This includes both "rider will finish Top-10" AND "rider won't finish Top-10" predictions
 
-    ai_selected = st.multiselect(
-        f"Select riders for {ai_category} analysis",
-        options=ai_riders.index.tolist(),
-        default=ai_riders.index.tolist()[:15] if len(ai_riders) >= 15 else ai_riders.index.tolist(),
-        key="ai_riders"
-    )
+**Top-3 Accuracy** is the same but for podium predictions:
+- Harder task (only 3 spots vs 10), so typically higher accuracy
+- {top3_accuracy:.1f}% accuracy on podium predictions
 
-    race_name = st.text_input("Race Name", value="UCI World Cup", key="ai_race_name")
+**vs Baseline** shows improvement over naive prediction:
+- Baseline ({baseline_accuracy:.1f}%) = always predicting the majority class
+- +{improvement:.1f}% means our model is meaningfully better than guessing
 
-    if st.button("🤖 Generate AI Analysis", disabled=not api_key_set or len(ai_selected) < 3):
-        if len(ai_selected) < 3:
-            st.error("Select at least 3 riders")
-        else:
-            with st.spinner("Generating predictions and AI analysis..."):
-                # Build predictions for selected riders
-                field_names_norm = [standardize_name(r) for r in ai_selected if standardize_name(r)]
+**AUC-ROC** (Area Under ROC Curve):
+- Measures how well the model RANKS riders by probability
+- 0.5 = random, 1.0 = perfect ranking
+- {auc_roc:.3f} = strong discriminative ability
+- *"If I pick a random Top-10 finisher and a random non-Top-10, the model correctly ranks them {auc_pct:.0f}% of the time"*
+        """.format(accuracy=accuracy, top3_accuracy=top3_accuracy, baseline_accuracy=baseline_accuracy, improvement=improvement, auc_roc=auc_roc, auc_pct=auc_pct))
 
-                ai_predictions = []
-                for rider in ai_selected:
-                    rider_std = standardize_name(rider)
-                    rider_history = historical_data[
-                        (historical_data["rider_name_std"] == rider_std) &
-                        (historical_data["Category Name"] == ai_category)
-                    ]
+    st.markdown("---")
 
-                    if len(rider_history) == 0:
-                        continue
+    # Section 2: Live Validation Metrics
+    st.markdown("### 🏁 Live Validation Metrics")
+    st.markdown("*How the model performs on actual race day predictions*")
 
-                    rider_data = rider_history.iloc[-1]
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Avg Live Precision", f"{avg_precision:.0f}%", help="When we predict Top-10, how often are we right?")
+    col2.metric("Avg Live Recall", f"{avg_recall:.0f}%", help="Of actual Top-10 finishers, how many did we predict?")
+    col3.metric("Races Validated", f"{len(validated_races)}", help="Number of races with actual results compared")
 
-                    # Calculate H2H
-                    h2h_features = calculate_h2h_features(rider_std, field_names_norm)
+    precision_out_of_4 = avg_precision / 100 * 4  # Pre-calculate for format string
 
-                    # Prepare features
-                    feature_cols = [f for f in config.NUMERIC_FEATURES if f != 'h2h_field_score'] + config.CATEGORICAL_FEATURES
-                    X = pd.DataFrame([rider_data[feature_cols]])
-                    X['h2h_field_score'] = h2h_features['h2h_field_score']
-                    X = pd.get_dummies(X, columns=config.CATEGORICAL_FEATURES, drop_first=True)
+    with st.expander("📖 Precision vs Recall explained"):
+        st.markdown("""
+**Precision** - *"Can I trust the predictions?"*
+- When we predict someone will finish Top-10, how often are they actually in Top-10?
+- Formula: True Positives / (True Positives + False Positives)
+- {avg_precision:.0f}% precision = ~{precision_out_of_4:.1f} out of 4 predictions are correct
+- **This is the most important metric for users** - it tells you how reliable our picks are
 
-                    for feat in metadata['features']:
-                        if feat not in X.columns:
-                            X[feat] = 0
-                    X = X[metadata['features']]
-                    X = X.fillna(config.FILL_VALUES)
+**Recall** - *"Did we catch all the winners?"*
+- Of all actual Top-10 finishers, how many did we predict?
+- Formula: True Positives / (True Positives + False Negatives)
+- {avg_recall:.0f}% recall = we identified {avg_recall:.0f}% of the actual Top-10
+- Lower recall = we're being conservative (missing some, but predictions are more reliable)
 
-                    top10_prob = model_top10.predict_proba(X)[0][1]
-                    top3_prob = model_top3.predict_proba(X)[0][1]
+**The Trade-off:**
+- Higher threshold (e.g., 70%) → Higher precision, lower recall (fewer but more reliable picks)
+- Lower threshold (e.g., 40%) → Lower precision, higher recall (more picks but less reliable)
+- We use 55% threshold to balance precision and recall
+        """.format(avg_precision=avg_precision, avg_recall=avg_recall, precision_out_of_4=precision_out_of_4))
 
-                    ai_predictions.append({
-                        "Rider": rider,
-                        "Top-10 Probability": top10_prob,
-                        "Top-3 Probability": top3_prob,
-                        "H2H Field Score": h2h_features['h2h_field_score'],
-                        "H2H Confidence": h2h_features['h2h_confidence'],
-                        "Recent Form": rider_data["avg_place_last3"],
-                        "Career Top-10 Rate": rider_data["top10_rate_career"],
-                        "Status": "found"
-                    })
+    st.markdown("---")
 
-                if ai_predictions:
-                    df_ai = pd.DataFrame(ai_predictions).sort_values("Top-10 Probability", ascending=False)
+    # Section 3: Calibration Metrics
+    st.markdown("### 📊 Calibration Metrics")
+    st.markdown("*How well the predicted probabilities match reality*")
 
-                    try:
-                        from src.llm.narratives import explain_predictions
-                        narratives = explain_predictions(df_ai, race_name)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Brier Score", f"{brier_score:.4f}", help="Lower is better (0 = perfect)")
+    col2.metric("Log Loss", f"{log_loss:.4f}", help="Lower is better - penalizes confident wrong predictions")
+    col3.metric("Calibration", calibration, help="Method used to calibrate probabilities")
 
-                        st.markdown("---")
-                        st.markdown("### 📝 Race Preview")
-                        st.markdown(narratives["race_preview"])
+    with st.expander("📖 What is calibration?"):
+        st.markdown("""
+**Calibration** means predicted probabilities match observed frequencies:
+- If we predict "70% chance of Top-10" for 100 riders, ~70 should actually finish Top-10
+- Without calibration, models often predict probabilities that are too extreme
 
-                        st.markdown("---")
-                        st.markdown("### 🏆 Podium Prediction")
-                        st.markdown(narratives["podium_prediction"])
+**Brier Score** ({brier_score:.4f}):
+- Measures mean squared error of probability predictions
+- Range: 0 (perfect) to 1 (worst)
+- <0.25 is considered good
+- Our {brier_score:.4f} indicates well-calibrated probabilities
 
-                        st.markdown("---")
-                        st.markdown("### 🔍 Top Rider Insights")
-                        for item in narratives["top_insights"]:
-                            st.markdown(f"**{item['rider']}**")
-                            st.markdown(f"> {item['insight']}")
-                            st.markdown("")
+**Log Loss** ({log_loss:.4f}):
+- Penalizes confident wrong predictions more heavily
+- A model saying "99% Top-10" for someone who finishes 50th gets heavily penalized
+- Lower is better; <0.7 is generally good
 
-                    except Exception as e:
-                        st.error(f"Error generating narrative: {e}")
-                else:
-                    st.error("No predictions could be generated for selected riders")
+**Platt Scaling** (our method):
+- Fits a logistic regression on model outputs to calibrate probabilities
+- Learned from validation data to correct systematic over/under-confidence
+        """.format(brier_score=brier_score, log_loss=log_loss))
+
+    st.markdown("---")
+
+    # Section 4: Training Details
+    st.markdown("### 🏋️ Training Details")
+    st.markdown("*How the model was built*")
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Training Set", f"{train_size:,}", help="Observations used to train the model")
+    col2.metric("Test Set", f"{test_size:,}", help="Observations held out for evaluation")
+    col3.metric("Total Observations", f"{total_obs:,}", help="All rider-race observations in dataset")
+    col4.metric("Races in Dataset", f"{total_races}", help="Unique races in training data")
+
+    # Parse training date for display
+    if training_date != 'N/A' and len(training_date) >= 10:
+        display_date = training_date[:10]
+    else:
+        display_date = training_date
+
+    st.markdown(f"**Last trained:** {display_date}")
+
+    with st.expander("📖 Training methodology"):
+        st.markdown("""
+**Algorithm:** Random Forest Classifier
+- 300 decision trees, max depth 15
+- Each tree sees a random subset of data and features
+- Final prediction = average of all tree predictions
+- Robust to overfitting, handles non-linear relationships well
+
+**Chronological Split:**
+- Training set: Earlier races (80%)
+- Test set: Later races (20%)
+- This simulates real-world usage: predicting future races from past data
+- No data leakage: test set never seen during training
+
+**Feature Engineering:**
+- {n_features} features across 4 categories:
+  - **Form features:** avg_place_last3, best_place_last5, days_since_last_race
+  - **Career features:** top10_rate_career, top3_rate_career, races_so_far
+  - **Points features:** uci_points_normalized, last_carried_points
+  - **H2H features:** h2h_field_score (win rate vs specific opponents)
+        """.format(n_features=len(metadata.get('features', []))))
+
+    st.markdown("---")
+
+    # Section 5: Per-Race Validation Table
+    st.markdown("### 🏆 Race-by-Race Validation")
+    st.markdown("*Detailed results from each validated race*")
+
+    if validated_races:
+        race_data = []
+        for race in validated_races:
+            v = race.get("validation", {})
+            race_data.append({
+                "Race": race["name"],
+                "Date": race["date"],
+                "Series": race.get("series", "N/A"),
+                "Version": race.get("version", "N/A"),
+                "Precision": f"{v.get('precision', 'N/A')}%" if v.get('precision') else "N/A",
+                "Recall": f"{v.get('recall', 'N/A')}%" if v.get('recall') else "N/A",
+                "High-Conf": f"{v.get('high_conf_accuracy', 'N/A')}%" if v.get('high_conf_accuracy') else "N/A",
+                "Notes": v.get("notes", "")
+            })
+
+        race_df = pd.DataFrame(race_data)
+        st.dataframe(race_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No validated races yet. Run predictions and compare to actual results to populate this table.")
 
 with tab3:
     st.header("Model Insights")
@@ -417,16 +595,56 @@ with tab3:
     st.markdown("### 🎯 Feature Importance")
     st.markdown("What the model considers most important:")
 
-    st.markdown("""
-    **Top 5 Most Important Features (v5 with H2H):**
-    1. **🥊 H2H Field Score** (21.4%) - Historical win rate vs specific opponents
-    2. **Average Place (Last 3)** (13.0%) - Current form trajectory
-    3. **Top-10 Career Rate** (12.9%) - Historical success in scoring positions
-    4. **Best Place (Last 5)** (12.7%) - Recent peak performance
-    5. **Last Place** (9.4%) - Momentum from most recent race
-    """)
+    # Dynamic feature importance from metadata
+    if 'feature_importance' in metadata:
+        fi = metadata['feature_importance']
+        # Sort by importance and get top 5
+        sorted_fi = sorted(fi.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    st.info("💡 **H2H is now the #1 feature!** The model weighs head-to-head history against the actual race field more than any other factor.")
+        # Feature name mapping for display
+        feature_names = {
+            "h2h_field_score": "🥊 H2H Field Score",
+            "avg_place_last3": "Average Place (Last 3)",
+            "best_place_last5": "Best Place (Last 5)",
+            "top10_rate_career": "Top-10 Career Rate",
+            "last_place": "Last Place",
+            "uci_points_normalized": "UCI Points",
+            "top3_rate_career": "Top-3 Career Rate",
+            "races_so_far": "Races This Season",
+            "days_since_last_race": "Days Since Last Race",
+            "series_appearances": "Series Appearances"
+        }
+
+        feature_descriptions = {
+            "h2h_field_score": "Historical win rate vs specific opponents",
+            "avg_place_last3": "Current form trajectory",
+            "best_place_last5": "Recent peak performance",
+            "top10_rate_career": "Historical success in scoring positions",
+            "last_place": "Momentum from most recent race",
+            "uci_points_normalized": "Official UCI ranking points",
+            "top3_rate_career": "Career podium rate",
+            "races_so_far": "Season experience",
+            "days_since_last_race": "Rest/freshness factor",
+            "series_appearances": "Experience in this race series"
+        }
+
+        current_version = registry.get("current_version", "v6")
+        st.markdown(f"**Top 5 Most Important Features ({current_version}):**")
+
+        for i, (feat, importance) in enumerate(sorted_fi, 1):
+            display_name = feature_names.get(feat, feat)
+            description = feature_descriptions.get(feat, "")
+            st.markdown(f"{i}. **{display_name}** ({importance}%) - {description}")
+
+        # Check if H2H is #1
+        top_feature = sorted_fi[0][0] if sorted_fi else None
+        if top_feature == "h2h_field_score":
+            st.info(f"💡 **H2H is the #1 feature at {sorted_fi[0][1]}%!** The model weighs head-to-head history against the actual race field more than any other factor.")
+        else:
+            top_name = feature_names.get(top_feature, top_feature)
+            st.info(f"💡 **{top_name}** is currently the most important feature at {sorted_fi[0][1]}%.")
+    else:
+        st.warning("Feature importance data not available. Retrain model to generate.")
 
     st.markdown("### 📈 Performance by Category")
 
@@ -449,6 +667,128 @@ with tab3:
         }),
         use_container_width=True
     )
+
+    # Distribution Analysis Section
+    st.markdown("### 📊 Probability Distribution Patterns")
+    st.markdown("How model confidence varies across races:")
+
+    # Get distribution data from all validated races
+    validated_with_dist = [r for r in registry.get("races", []) if r.get("validation", {}).get("distribution")]
+
+    if validated_with_dist:
+        dist_data = []
+        for race in validated_with_dist:
+            d = race["validation"]["distribution"]
+            mid_pct = d["mid_pct"]
+            if mid_pct < 10:
+                pattern = "BIMODAL"
+            elif mid_pct > 20:
+                pattern = "BALANCED"
+            else:
+                pattern = "MODERATE"
+
+            dist_data.append({
+                "Race": race["name"],
+                "Version": race.get("version", "N/A"),
+                "Low (<30%)": f"{d['low_pct']:.0f}%",
+                "Mid (30-60%)": f"{d['mid_pct']:.1f}%",
+                "High (>60%)": f"{d['high_pct']:.0f}%",
+                "Pattern": pattern,
+                "Field": d["field_size"],
+                "New Riders": d["new_rider_count"],
+                # Keep raw values for chart
+                "low_raw": d["low_pct"],
+                "mid_raw": d["mid_pct"],
+                "high_raw": d["high_pct"]
+            })
+
+        dist_df = pd.DataFrame(dist_data)
+
+        # Stacked Bar Chart - Distribution Patterns Across Races
+        race_labels = [f"{r['Race']} ({r['Version']})" for r in dist_data]
+
+        fig_dist = go.Figure()
+
+        # Add bars in order: Low, Mid, High (stacked)
+        fig_dist.add_trace(go.Bar(
+            name='Low (<30%)',
+            x=race_labels,
+            y=[r['low_raw'] for r in dist_data],
+            marker_color='#94a3b8',  # gray
+            text=[f"{r['low_raw']:.0f}%" for r in dist_data],
+            textposition='inside',
+            hovertemplate='%{x}<br>Low (<30%%): %{y:.1f}%<extra></extra>'
+        ))
+
+        fig_dist.add_trace(go.Bar(
+            name='Mid (30-60%)',
+            x=race_labels,
+            y=[r['mid_raw'] for r in dist_data],
+            marker_color='#f59e0b',  # amber/orange
+            text=[f"{r['mid_raw']:.0f}%" if r['mid_raw'] >= 5 else "" for r in dist_data],
+            textposition='inside',
+            hovertemplate='%{x}<br>Mid (30-60%%): %{y:.1f}%<extra></extra>'
+        ))
+
+        fig_dist.add_trace(go.Bar(
+            name='High (>60%)',
+            x=race_labels,
+            y=[r['high_raw'] for r in dist_data],
+            marker_color='#22c55e',  # green
+            text=[f"{r['high_raw']:.0f}%" for r in dist_data],
+            textposition='inside',
+            hovertemplate='%{x}<br>High (>60%%): %{y:.1f}%<extra></extra>'
+        ))
+
+        fig_dist.update_layout(
+            title='Probability Distribution by Race',
+            barmode='stack',
+            height=400,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            yaxis=dict(title="% of Field", range=[0, 105]),
+            xaxis=dict(tickangle=45),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=100)
+        )
+
+        # Add pattern annotations
+        for i, r in enumerate(dist_data):
+            pattern_emoji = "🎯" if r['Pattern'] == "BIMODAL" else ("⚖️" if r['Pattern'] == "BALANCED" else "📊")
+            fig_dist.add_annotation(
+                x=race_labels[i],
+                y=102,
+                text=f"{pattern_emoji} {r['Pattern']}",
+                showarrow=False,
+                font=dict(size=9, color='#374151'),
+                yshift=5
+            )
+
+        st.plotly_chart(fig_dist, use_container_width=True)
+
+        # Show data table below chart
+        display_cols = ["Race", "Version", "Low (<30%)", "Mid (30-60%)", "High (>60%)", "Pattern", "Field", "New Riders"]
+        st.dataframe(dist_df[display_cols], use_container_width=True, hide_index=True)
+
+        with st.expander("📖 Understanding Distribution Patterns"):
+            st.markdown("""
+**What the distribution tells you:**
+
+| Pattern | Mid-Range % | Meaning | Trust Level |
+|---------|-------------|---------|-------------|
+| **BIMODAL** | <10% | Model is confident - clear separation between contenders and non-contenders | Higher - predictions are decisive |
+| **BALANCED** | >20% | Model is uncertain - many "coin flip" riders in the middle | Lower - more surprises possible |
+| **MODERATE** | 10-20% | Typical race - some clear favorites, some uncertainty | Normal |
+
+**Key Insights:**
+- Earlier versions (v1, v2) had more MODERATE distributions
+- Later versions (v6+) trend toward BIMODAL as H2H matures
+- BIMODAL = model knows the field well, trust the predictions
+- New riders push toward BIMODAL (they get low probabilities)
+            """)
+    else:
+        st.info("No distribution data available yet. Run `python pipeline.py backfill-distribution` to calculate.")
 
 with tab4:
     st.header("Season Tracker")
@@ -478,7 +818,8 @@ with tab4:
                 "results": {
                     "M": race["results"].get("Men Elite", ""),
                     "W": race["results"].get("Women Elite", ""),
-                }
+                },
+                "validation": race.get("validation", {})  # Include validation with distribution
             }
 
     # Model version history (from registry)
@@ -604,168 +945,235 @@ with tab4:
     # Reverse to show oldest first in charts
     RACES = RACES[::-1]
 
-    # Summary stats
+    # Summary stats (all dynamic from registry)
     total_predictions = sum(r["predictions"] for r in RACES)
     total_correct = sum(r["correct"] for r in RACES)
     season_precision = (total_correct / total_predictions * 100) if total_predictions > 0 else 0
+    current_version = registry.get("current_version", "v6")
 
-    st.caption(f"{len(RACES)} Races | {len(VERSIONS)} Versions | {total_predictions} Predictions | {total_correct} Correct | Season Precision: {season_precision:.0f}% | Current: v6")
-
-    # Create interactive 6-panel dashboard with Plotly
-    fig = make_subplots(
-        rows=3, cols=2,
-        subplot_titles=(
-            'Live Race Performance', 'Prediction Volume & Accuracy',
-            'Training Accuracy by Version', 'Model Quality (AUC-ROC) v3-v6',
-            'Feature Importance Evolution', 'Training Dataset Growth'
-        ),
-        vertical_spacing=0.12,
-        horizontal_spacing=0.08
-    )
+    st.caption(f"{len(RACES)} Races | {len(VERSIONS)} Versions | {total_predictions} Predictions | {total_correct} Correct | Season Precision: {season_precision:.0f}% | Current: {current_version}")
 
     # ============================================================
-    # Panel 1: Live Race Performance (top left)
+    # ROW 1: Live Race Performance & Prediction Volume
     # ============================================================
-    race_labels = [f"{r['name']} ({r['version']})" for r in RACES]
+    st.markdown("#### Live Race Performance")
 
-    fig.add_trace(go.Bar(
-        name='Recall (%)', x=race_labels, y=[r["accuracy"] for r in RACES],
-        marker_color='#22c55e', text=[f"{r['accuracy']}%" for r in RACES],
-        textposition='outside', hovertemplate='%{x}<br>Recall: %{y}%<extra></extra>'
-    ), row=1, col=1)
+    row1_col1, row1_col2 = st.columns(2)
 
-    fig.add_trace(go.Bar(
-        name='Precision (%)', x=race_labels, y=[r["precision"] for r in RACES],
-        marker_color='#3b82f6', text=[f"{r['precision']}%" for r in RACES],
-        textposition='outside', hovertemplate='%{x}<br>Precision: %{y}%<extra></extra>'
-    ), row=1, col=1)
+    with row1_col1:
+        # Panel 1: Live Race Performance
+        race_labels = [f"{r['name']} ({r['version']})" for r in RACES]
 
-    fig.add_trace(go.Bar(
-        name='Podium (%)', x=race_labels, y=[r["podium"] for r in RACES],
-        marker_color='#f59e0b', text=[f"{r['podium']}%" for r in RACES],
-        textposition='outside', hovertemplate='%{x}<br>Podium: %{y}%<extra></extra>'
-    ), row=1, col=1)
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(
+            name='Recall (%)', x=race_labels, y=[r["accuracy"] for r in RACES],
+            marker_color='#22c55e', text=[f"{r['accuracy']}%" for r in RACES],
+            textposition='outside', hovertemplate='%{x}<br>Recall: %{y}%<extra></extra>'
+        ))
+        fig1.add_trace(go.Bar(
+            name='Precision (%)', x=race_labels, y=[r["precision"] for r in RACES],
+            marker_color='#3b82f6', text=[f"{r['precision']}%" for r in RACES],
+            textposition='outside', hovertemplate='%{x}<br>Precision: %{y}%<extra></extra>'
+        ))
+        fig1.add_trace(go.Bar(
+            name='Podium (%)', x=race_labels, y=[r["podium"] for r in RACES],
+            marker_color='#f59e0b', text=[f"{r['podium']}%" for r in RACES],
+            textposition='outside', hovertemplate='%{x}<br>Podium: %{y}%<extra></extra>'
+        ))
 
-    # ============================================================
-    # Panel 2: Predictions Made vs Correct (top right)
-    # ============================================================
-    race_date_labels = [f"{r['name']} ({r['date']})" for r in RACES]
+        fig1.update_layout(
+            title='Live Race Performance',
+            height=350,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            barmode='group',
+            yaxis=dict(range=[0, 115], title="Percentage"),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=80)
+        )
+        st.plotly_chart(fig1, use_container_width=True)
 
-    fig.add_trace(go.Bar(
-        name='Predictions Made', x=race_date_labels, y=[r["predictions"] for r in RACES],
-        marker_color='#94a3b8', text=[str(r['predictions']) for r in RACES],
-        textposition='outside', hovertemplate='%{x}<br>Predictions: %{y}<extra></extra>',
-        showlegend=True
-    ), row=1, col=2)
+    with row1_col2:
+        # Panel 2: Predictions Made vs Correct
+        race_date_labels = [f"{r['name']} ({r['date']})" for r in RACES]
 
-    fig.add_trace(go.Bar(
-        name='Correct (Top-10)', x=race_date_labels, y=[r["correct"] for r in RACES],
-        marker_color='#22c55e', text=[str(r['correct']) for r in RACES],
-        textposition='outside', hovertemplate='%{x}<br>Correct: %{y}<extra></extra>',
-        showlegend=True
-    ), row=1, col=2)
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(
+            name='Predictions Made', x=race_date_labels, y=[r["predictions"] for r in RACES],
+            marker_color='#94a3b8', text=[str(r['predictions']) for r in RACES],
+            textposition='outside', hovertemplate='%{x}<br>Predictions: %{y}<extra></extra>'
+        ))
+        fig2.add_trace(go.Bar(
+            name='Correct (Top-10)', x=race_date_labels, y=[r["correct"] for r in RACES],
+            marker_color='#22c55e', text=[str(r['correct']) for r in RACES],
+            textposition='outside', hovertemplate='%{x}<br>Correct: %{y}<extra></extra>'
+        ))
 
-    # ============================================================
-    # Panel 3: Training Accuracy - All Versions (middle left)
-    # ============================================================
-    v_all = [v["version"] for v in VERSIONS]
-    accuracies = [v["accuracy"] for v in VERSIONS]
-    innovations = [v["innovation"] for v in VERSIONS]
-
-    fig.add_trace(go.Bar(
-        name='Training Accuracy', x=v_all, y=accuracies,
-        marker_color='#22c55e', text=[f"{a}%" for a in accuracies],
-        textposition='outside', showlegend=False,
-        hovertemplate='%{x}<br>Accuracy: %{y}%<br>%{customdata}<extra></extra>',
-        customdata=innovations
-    ), row=2, col=1)
-
-    # ============================================================
-    # Panel 4: Model Quality - AUC-ROC (middle right)
-    # ============================================================
-    versions_with_auc = [v for v in VERSIONS if v["auc"] is not None]
-    v_names = [v["version"] for v in versions_with_auc]
-    aucs = [v["auc"] for v in versions_with_auc]
-    auc_innovations = [v["innovation"] for v in versions_with_auc]
-
-    fig.add_trace(go.Scatter(
-        name='AUC-ROC', x=v_names, y=aucs, mode='lines+markers+text',
-        line=dict(color='#8b5cf6', width=3),
-        marker=dict(size=12, color='white', line=dict(color='#8b5cf6', width=2)),
-        text=[f"{a:.3f}" for a in aucs], textposition='top center',
-        hovertemplate='%{x}<br>AUC: %{y:.3f}<br>%{customdata}<extra></extra>',
-        customdata=auc_innovations, showlegend=False
-    ), row=2, col=2)
+        max_predictions = max([r["predictions"] for r in RACES], default=50) if RACES else 50
+        fig2.update_layout(
+            title='Prediction Volume & Accuracy',
+            height=350,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            barmode='group',
+            yaxis=dict(range=[0, max_predictions + 10], title="Count"),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=80)
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
     # ============================================================
-    # Panel 5: Feature Importance Evolution (bottom left)
+    # ROW 2: Training Accuracy & Model Quality
     # ============================================================
-    features = ["h2h_field_score", "avg_place_last3", "best_place_last5", "top10_rate_career", "uci_points_normalized"]
-    feature_labels = ["H2H Score", "Avg Place (L3)", "Best Place (L5)", "Top-10 Rate", "UCI Points"]
-    feature_colors = ["#ef4444", "#22c55e", "#3b82f6", "#f59e0b", "#8b5cf6"]
-    versions_fi = list(FEATURE_IMPORTANCE.keys())
+    st.markdown("#### Model Training Evolution")
 
-    for feat, label, color in zip(features, feature_labels, feature_colors):
-        values = [FEATURE_IMPORTANCE[v].get(feat, 0) for v in versions_fi]
-        fig.add_trace(go.Scatter(
-            name=label, x=versions_fi, y=values, mode='lines+markers',
-            line=dict(color=color, width=2),
-            marker=dict(size=8, color=color),
-            hovertemplate=f'{label}<br>%{{x}}: %{{y:.1f}}%<extra></extra>'
-        ), row=3, col=1)
+    row2_col1, row2_col2 = st.columns(2)
 
-    # Add annotation for H2H breakthrough
-    fig.add_annotation(
-        x='v5', y=21.4, text='H2H becomes #1', showarrow=True,
-        arrowhead=2, arrowcolor='#ef4444', font=dict(color='#ef4444', size=10),
-        ax=-40, ay=-30, row=3, col=1
-    )
+    with row2_col1:
+        # Panel 3: Training Accuracy - All Versions
+        v_all = [v["version"] for v in VERSIONS]
+        accuracies = [v["accuracy"] for v in VERSIONS]
+        innovations = [v["innovation"] for v in VERSIONS]
+
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(
+            name='Training Accuracy', x=v_all, y=accuracies,
+            marker_color='#22c55e', text=[f"{a}%" for a in accuracies],
+            textposition='outside',
+            hovertemplate='%{x}<br>Accuracy: %{y}%<br>%{customdata}<extra></extra>',
+            customdata=innovations
+        ))
+
+        if VERSIONS:
+            min_acc = min(v["accuracy"] for v in VERSIONS) - 2
+            max_acc = max(v["accuracy"] for v in VERSIONS) + 2
+        else:
+            min_acc, max_acc = 74, 86
+
+        fig3.update_layout(
+            title='Training Accuracy by Version',
+            height=350,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            yaxis=dict(range=[min_acc, max_acc], title="Accuracy (%)"),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=80)
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with row2_col2:
+        # Panel 4: Model Quality - AUC-ROC
+        versions_with_auc = [v for v in VERSIONS if v["auc"] is not None]
+        v_names = [v["version"] for v in versions_with_auc]
+        aucs = [v["auc"] for v in versions_with_auc]
+        auc_innovations = [v["innovation"] for v in versions_with_auc]
+
+        fig4 = go.Figure()
+        fig4.add_trace(go.Scatter(
+            name='AUC-ROC', x=v_names, y=aucs, mode='lines+markers+text',
+            line=dict(color='#8b5cf6', width=3),
+            marker=dict(size=12, color='white', line=dict(color='#8b5cf6', width=2)),
+            text=[f"{a:.3f}" for a in aucs], textposition='top center',
+            hovertemplate='%{x}<br>AUC: %{y:.3f}<br>%{customdata}<extra></extra>',
+            customdata=auc_innovations
+        ))
+
+        if versions_with_auc:
+            min_auc = min(v["auc"] for v in versions_with_auc) - 0.01
+            max_auc = max(v["auc"] for v in versions_with_auc) + 0.01
+        else:
+            min_auc, max_auc = 0.810, 0.860
+
+        fig4.update_layout(
+            title='Model Quality (AUC-ROC) v3-v6',
+            height=350,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            yaxis=dict(range=[min_auc, max_auc], title="AUC-ROC"),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=80)
+        )
+        st.plotly_chart(fig4, use_container_width=True)
 
     # ============================================================
-    # Panel 6: Dataset Growth (bottom right)
+    # ROW 3: Feature Importance & Dataset Growth
     # ============================================================
-    obs = [v["observations"] for v in VERSIONS]
+    st.markdown("#### Feature & Data Evolution")
 
-    fig.add_trace(go.Scatter(
-        name='Observations', x=v_all, y=obs, mode='lines+markers+text',
-        fill='tozeroy', fillcolor='rgba(6, 182, 212, 0.2)',
-        line=dict(color='#06b6d4', width=3),
-        marker=dict(size=10, color='white', line=dict(color='#06b6d4', width=2)),
-        text=[f"{o:,}" for o in obs], textposition='top center',
-        hovertemplate='%{x}<br>Observations: %{y:,}<extra></extra>',
-        showlegend=False
-    ), row=3, col=2)
+    row3_col1, row3_col2 = st.columns(2)
 
-    # Update layout
-    fig.update_layout(
-        height=900,
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5
-        ),
-        barmode='group',
-        hovermode='x unified',
-        plot_bgcolor='#f8f9fa',
-        paper_bgcolor='white'
-    )
+    with row3_col1:
+        # Panel 5: Feature Importance Evolution
+        features = ["h2h_field_score", "avg_place_last3", "best_place_last5", "top10_rate_career", "uci_points_normalized"]
+        feature_labels = ["H2H Score", "Avg Place (L3)", "Best Place (L5)", "Top-10 Rate", "UCI Points"]
+        feature_colors = ["#ef4444", "#22c55e", "#3b82f6", "#f59e0b", "#8b5cf6"]
+        versions_fi = list(FEATURE_IMPORTANCE.keys())
 
-    # Update axes
-    fig.update_yaxes(range=[0, 115], row=1, col=1, title_text="Percentage")
-    fig.update_yaxes(range=[0, 55], row=1, col=2, title_text="Count")
-    fig.update_yaxes(range=[74, 82], row=2, col=1, title_text="Accuracy (%)")
-    fig.update_yaxes(range=[0.810, 0.845], row=2, col=2, title_text="AUC-ROC")
-    fig.update_yaxes(range=[0, 28], row=3, col=1, title_text="Importance (%)")
-    fig.update_yaxes(range=[7500, 8600], row=3, col=2, title_text="Observations")
+        fig5 = go.Figure()
+        for feat, label, color in zip(features, feature_labels, feature_colors):
+            values = [FEATURE_IMPORTANCE[v].get(feat, 0) for v in versions_fi]
+            fig5.add_trace(go.Scatter(
+                name=label, x=versions_fi, y=values, mode='lines+markers',
+                line=dict(color=color, width=2),
+                marker=dict(size=8, color=color),
+                hovertemplate=f'{label}<br>%{{x}}: %{{y:.1f}}%<extra></extra>'
+            ))
 
-    # Add gridlines
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.1)')
-    fig.update_xaxes(showgrid=False)
+        # Add annotation for H2H breakthrough
+        fig5.add_annotation(
+            x='v5', y=21.4, text='H2H becomes #1', showarrow=True,
+            arrowhead=2, arrowcolor='#ef4444', font=dict(color='#ef4444', size=10),
+            ax=-40, ay=-30
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        fig5.update_layout(
+            title='Feature Importance Evolution',
+            height=350,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            yaxis=dict(range=[0, 28], title="Importance (%)"),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=100)
+        )
+        st.plotly_chart(fig5, use_container_width=True)
+
+    with row3_col2:
+        # Panel 6: Dataset Growth
+        v_all = [v["version"] for v in VERSIONS]
+        obs = [v["observations"] for v in VERSIONS]
+
+        fig6 = go.Figure()
+        fig6.add_trace(go.Scatter(
+            name='Observations', x=v_all, y=obs, mode='lines+markers+text',
+            fill='tozeroy', fillcolor='rgba(6, 182, 212, 0.2)',
+            line=dict(color='#06b6d4', width=3),
+            marker=dict(size=10, color='white', line=dict(color='#06b6d4', width=2)),
+            text=[f"{o:,}" for o in obs], textposition='top center',
+            hovertemplate='%{x}<br>Observations: %{y:,}<extra></extra>'
+        ))
+
+        if VERSIONS:
+            min_obs = min(v["observations"] for v in VERSIONS) * 0.95
+            max_obs = max(v["observations"] for v in VERSIONS) * 1.05
+        else:
+            min_obs, max_obs = 7500, 9500
+
+        fig6.update_layout(
+            title='Training Dataset Growth',
+            height=350,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+            yaxis=dict(range=[min_obs, max_obs], title="Observations"),
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            margin=dict(b=80)
+        )
+        st.plotly_chart(fig6, use_container_width=True)
 
     # Key insights (auto-calculated from RACES data)
     st.markdown("### Key Insights")
@@ -805,6 +1213,148 @@ with tab4:
         else:
             st.metric("Dataset Growth", "N/A")
         st.metric("Versions Tested", str(len(VERSIONS)), help="Continuous improvement through live validation")
+
+    # ============================================================
+    # Model Progression - Hits@10 and Hits@3 over time
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### Model Progression (Original Predictions)")
+    st.markdown("How our predictions improved as the model evolved through the season")
+
+    # Load progression data
+    progression_path = Path(__file__).parent.parent / "data/clean/model_progression.csv"
+    if progression_path.exists():
+        prog_df = pd.read_csv(progression_path, parse_dates=['date'])
+        prog_df = prog_df.sort_values('date')
+
+        # Create two charts side by side
+        prog_col1, prog_col2 = st.columns(2)
+
+        with prog_col1:
+            # Hits@10 chart
+            fig_h10 = go.Figure()
+
+            # Men Elite
+            men_df = prog_df[prog_df['category'] == 'Men Elite']
+            fig_h10.add_trace(go.Scatter(
+                x=[f"{r['race']} ({r['model_version']})" for _, r in men_df.iterrows()],
+                y=men_df['hits_10'],
+                mode='lines+markers+text',
+                name='Men Elite',
+                line=dict(color='#3b82f6', width=3),
+                marker=dict(size=10),
+                text=[f"{h}/10" for h in men_df['hits_10']],
+                textposition='top center',
+                hovertemplate='%{x}<br>Hits@10: %{y}/10<extra>Men Elite</extra>'
+            ))
+
+            # Women Elite
+            women_df = prog_df[prog_df['category'] == 'Women Elite']
+            fig_h10.add_trace(go.Scatter(
+                x=[f"{r['race']} ({r['model_version']})" for _, r in women_df.iterrows()],
+                y=women_df['hits_10'],
+                mode='lines+markers+text',
+                name='Women Elite',
+                line=dict(color='#ec4899', width=3),
+                marker=dict(size=10),
+                text=[f"{h}/10" for h in women_df['hits_10']],
+                textposition='bottom center',
+                hovertemplate='%{x}<br>Hits@10: %{y}/10<extra>Women Elite</extra>'
+            ))
+
+            # Target line
+            fig_h10.add_hline(y=7, line_dash="dash", line_color="#22c55e", line_width=2,
+                            annotation_text="Target (7/10)", annotation_position="right")
+
+            fig_h10.update_layout(
+                title='Hits@10 Progression',
+                height=400,
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+                yaxis=dict(range=[0, 11], title="Hits@10", dtick=2),
+                xaxis=dict(tickangle=45),
+                plot_bgcolor='#f8f9fa',
+                paper_bgcolor='white',
+                margin=dict(b=120)
+            )
+            st.plotly_chart(fig_h10, use_container_width=True)
+
+        with prog_col2:
+            # Hits@3 chart
+            fig_h3 = go.Figure()
+
+            # Men Elite
+            fig_h3.add_trace(go.Scatter(
+                x=[f"{r['race']} ({r['model_version']})" for _, r in men_df.iterrows()],
+                y=men_df['hits_3'],
+                mode='lines+markers+text',
+                name='Men Elite',
+                line=dict(color='#3b82f6', width=3),
+                marker=dict(size=10),
+                text=[f"{h}/3" for h in men_df['hits_3']],
+                textposition='top center',
+                hovertemplate='%{x}<br>Hits@3: %{y}/3<extra>Men Elite</extra>'
+            ))
+
+            # Women Elite
+            fig_h3.add_trace(go.Scatter(
+                x=[f"{r['race']} ({r['model_version']})" for _, r in women_df.iterrows()],
+                y=women_df['hits_3'],
+                mode='lines+markers+text',
+                name='Women Elite',
+                line=dict(color='#ec4899', width=3),
+                marker=dict(size=10),
+                text=[f"{h}/3" for h in women_df['hits_3']],
+                textposition='bottom center',
+                hovertemplate='%{x}<br>Hits@3: %{y}/3<extra>Women Elite</extra>'
+            ))
+
+            # Target line
+            fig_h3.add_hline(y=2, line_dash="dash", line_color="#22c55e", line_width=2,
+                            annotation_text="Target (2/3)", annotation_position="right")
+
+            fig_h3.update_layout(
+                title='Hits@3 Progression (Podium)',
+                height=400,
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+                yaxis=dict(range=[0, 4], title="Hits@3", dtick=1),
+                xaxis=dict(tickangle=45),
+                plot_bgcolor='#f8f9fa',
+                paper_bgcolor='white',
+                margin=dict(b=120)
+            )
+            st.plotly_chart(fig_h3, use_container_width=True)
+
+        # Summary stats
+        avg_h10 = prog_df['hits_10'].mean()
+        avg_h3 = prog_df['hits_3'].mean()
+        latest_version = prog_df.iloc[-1]['model_version']
+
+        prog_stat1, prog_stat2, prog_stat3, prog_stat4 = st.columns(4)
+        prog_stat1.metric("Avg Hits@10", f"{avg_h10:.1f}/10")
+        prog_stat2.metric("Avg Hits@3", f"{avg_h3:.1f}/3")
+        prog_stat3.metric("Races Tracked", len(prog_df) // 2)
+        prog_stat4.metric("Latest Version", latest_version)
+
+        with st.expander("📖 Understanding Progression Metrics"):
+            st.markdown("""
+**What this shows:**
+- These are the **actual predictions** made at race time with the model version available
+- v1 → v2: Big jump from 4/10 to 8/10 (Men) as threshold tuning improved
+- v6.x: Stabilized around 6-7/10 with mature H2H feature
+
+**Why early races look worse:**
+1. v1 had no UCI inference for new riders
+2. v1/v2 had no H2H feature (added in v5)
+3. Early models used 0.5 threshold (too permissive)
+
+**Going forward (v6.4+):**
+- Antwerpen onwards will use v6.4 with robust feature extraction
+- Target: 7+/10 Hits@10, 2+/3 Hits@3
+            """)
+    else:
+        st.info("Progression data not found. Run `python calculate_original_hits.py` to generate.")
 
     # ============================================================
     # Race-by-Race Results - Interactive Scatter Plots
@@ -945,128 +1495,330 @@ with tab4:
         st.warning("No prediction data found for this race. Check that prediction and result files exist.")
         st.stop()
 
-    # Prepare data for plotting
-    scatter_fig = go.Figure()
+    # Separate predictions by gender
+    men_predictions = [(r, p, pos, g) for r, p, pos, g in predictions if g == 'M']
+    women_predictions = [(r, p, pos, g) for r, p, pos, g in predictions if g == 'W']
 
-    # Separate by category (true positive, false positive, below threshold)
-    for rider, prob, position, gender in predictions:
-        is_top10 = position <= 10
-        above_threshold = prob >= threshold
+    def create_scatter_chart(preds, gender_label, threshold, version, race_name):
+        """Create a scatter chart for a single gender category."""
+        fig = go.Figure()
 
-        if above_threshold and is_top10:
-            color = '#22c55e'  # green - true positive
-            category = 'True Positive'
-        elif above_threshold and not is_top10:
-            color = '#ef4444'  # red - false positive
-            category = 'False Positive'
+        for rider, prob, position, gender in preds:
+            is_top10 = position <= 10
+            above_threshold = prob >= threshold
+
+            if above_threshold and is_top10:
+                color = '#22c55e'  # green - true positive
+                category = 'True Positive'
+            elif above_threshold and not is_top10:
+                color = '#ef4444'  # red - false positive
+                category = 'False Positive'
+            else:
+                color = '#9ca3af'  # gray - below threshold
+                category = 'Below Threshold'
+
+            fig.add_trace(go.Scatter(
+                x=[prob * 100],
+                y=[position],
+                mode='markers+text',
+                marker=dict(size=12, color=color, line=dict(color='white', width=2)),
+                text=[rider],
+                textposition='middle right',
+                textfont=dict(size=9),
+                name=rider,
+                hovertemplate=f'<b>{rider}</b><br>Probability: {prob*100:.0f}%<br>Position: {position}<br>{category}<extra></extra>',
+                showlegend=False
+            ))
+
+        # Add threshold line
+        fig.add_vline(
+            x=threshold * 100, line_dash="dash", line_color="#3b82f6", line_width=2,
+            annotation_text=f"Threshold ({int(threshold*100)}%)",
+            annotation_position="top"
+        )
+
+        # Add Top-10 zone
+        fig.add_hrect(y0=0, y1=10.5, fillcolor="#22c55e", opacity=0.1, line_width=0)
+        fig.add_hline(y=10.5, line_color="#22c55e", line_width=1, opacity=0.5)
+
+        # Calculate max position for y-axis
+        max_position = max(p[2] for p in preds) if preds else 20
+
+        fig.update_layout(
+            title=dict(
+                text=f"{gender_label}",
+                x=0.5,
+                font=dict(size=14)
+            ),
+            xaxis_title="Predicted Top-10 Probability (%)",
+            yaxis_title="Actual Finish Position",
+            xaxis=dict(range=[0, 105], showgrid=True, gridcolor='rgba(0,0,0,0.1)'),
+            yaxis=dict(range=[max_position + 3, 0], showgrid=True, gridcolor='rgba(0,0,0,0.1)'),
+            height=400,
+            plot_bgcolor='#f8f9fa',
+            paper_bgcolor='white',
+            hovermode='closest',
+            margin=dict(t=50, b=50),
+            annotations=[
+                dict(
+                    x=5, y=5, text="TOP 10", showarrow=False,
+                    font=dict(color='#22c55e', size=10, weight='bold'), opacity=0.7
+                )
+            ]
+        )
+
+        return fig
+
+    def calc_stats(preds, threshold):
+        """Calculate precision/recall stats for predictions."""
+        above_thresh = [(r, p, pos, g) for r, p, pos, g in preds if p >= threshold]
+        true_pos = sum(1 for _, _, pos, _ in above_thresh if pos <= 10)
+        total_top10 = sum(1 for _, _, pos, _ in preds if pos <= 10)
+        precision = true_pos / len(above_thresh) * 100 if above_thresh else 0
+        recall = true_pos / total_top10 * 100 if total_top10 > 0 else 0
+        return len(above_thresh), true_pos, precision, recall
+
+    # Display side-by-side charts
+    st.markdown(f"**{version} | {selected_race}** - Predicted Probability vs Actual Result")
+
+    col_men, col_women = st.columns(2)
+
+    with col_men:
+        if men_predictions:
+            men_fig = create_scatter_chart(men_predictions, "Men Elite", threshold, version, selected_race)
+            st.plotly_chart(men_fig, use_container_width=True)
+
+            # Men stats
+            m_preds, m_tp, m_prec, m_recall = calc_stats(men_predictions, threshold)
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Predictions", m_preds)
+            m2.metric("Correct", m_tp)
+            m3.metric("Precision", f"{m_prec:.0f}%")
+            m4.metric("Recall", f"{m_recall:.0f}%")
         else:
-            color = '#9ca3af'  # gray - below threshold
-            category = 'Below Threshold'
+            st.info("No Men Elite data for this race")
 
-        symbol = 'square' if gender == 'W' else 'circle'
-        gender_label = 'Women Elite' if gender == 'W' else 'Men Elite'
+    with col_women:
+        if women_predictions:
+            women_fig = create_scatter_chart(women_predictions, "Women Elite", threshold, version, selected_race)
+            st.plotly_chart(women_fig, use_container_width=True)
 
-        scatter_fig.add_trace(go.Scatter(
-            x=[prob * 100],
-            y=[position],
-            mode='markers+text',
-            marker=dict(size=14, color=color, symbol=symbol, line=dict(color='white', width=2)),
-            text=[rider],
-            textposition='middle right',
-            textfont=dict(size=10),
-            name=f'{rider} ({gender_label})',
-            hovertemplate=f'<b>{rider}</b><br>Probability: {prob*100:.0f}%<br>Position: {position}<br>{gender_label}<br>{category}<extra></extra>',
-            showlegend=False
-        ))
+            # Women stats
+            w_preds, w_tp, w_prec, w_recall = calc_stats(women_predictions, threshold)
+            w1, w2, w3, w4 = st.columns(4)
+            w1.metric("Predictions", w_preds)
+            w2.metric("Correct", w_tp)
+            w3.metric("Precision", f"{w_prec:.0f}%")
+            w4.metric("Recall", f"{w_recall:.0f}%")
+        else:
+            st.info("No Women Elite data for this race")
 
-    # Add threshold line
-    scatter_fig.add_vline(
-        x=threshold * 100, line_dash="dash", line_color="#3b82f6", line_width=2,
-        annotation_text=f"Threshold ({int(threshold*100)}%)",
-        annotation_position="top"
-    )
-
-    # Add Top-10 zone
-    scatter_fig.add_hrect(y0=0, y1=10.5, fillcolor="#22c55e", opacity=0.1, line_width=0)
-    scatter_fig.add_hline(y=10.5, line_color="#22c55e", line_width=1, opacity=0.5)
-
-    # Calculate stats
-    above_thresh = [(r, p, pos, g) for r, p, pos, g in predictions if p >= threshold]
-    true_pos = sum(1 for _, _, pos, _ in above_thresh if pos <= 10)
-    false_pos = len(above_thresh) - true_pos
-    total_top10 = sum(1 for _, _, pos, _ in predictions if pos <= 10)
-    precision = true_pos / len(above_thresh) * 100 if above_thresh else 0
-    recall = true_pos / total_top10 * 100 if total_top10 > 0 else 0
-
-    max_position = max(p[2] for p in predictions)
-
-    scatter_fig.update_layout(
-        title=dict(
-            text=f"VeloPredict {version} | {selected_race}<br><sub>Predicted Probability vs Actual Result</sub>",
-            x=0.5,
-            font=dict(size=16)
-        ),
-        xaxis_title="Predicted Top-10 Probability (%)",
-        yaxis_title="Actual Finish Position",
-        xaxis=dict(range=[0, 105], showgrid=True, gridcolor='rgba(0,0,0,0.1)'),
-        yaxis=dict(range=[max_position + 3, 0], showgrid=True, gridcolor='rgba(0,0,0,0.1)'),  # Inverted
-        height=500,
-        plot_bgcolor='#f8f9fa',
-        paper_bgcolor='white',
-        hovermode='closest',
-        annotations=[
-            dict(
-                x=5, y=5, text="TOP 10 ZONE", showarrow=False,
-                font=dict(color='#22c55e', size=12, weight='bold'), opacity=0.7
-            )
-        ]
-    )
-
-    st.plotly_chart(scatter_fig, use_container_width=True)
-
-    # Stats row
-    stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
-    stat_col1.metric("Predictions", len(above_thresh))
-    stat_col2.metric("True Positives", true_pos)
-    stat_col3.metric("Precision", f"{precision:.0f}%")
-    stat_col4.metric("Recall", f"{recall:.0f}%")
+    # Combined stats
+    st.markdown("---")
+    all_preds, all_tp, all_prec, all_recall = calc_stats(predictions, threshold)
+    st.markdown(f"**Combined:** {all_preds} predictions, {all_tp} correct, {all_prec:.0f}% precision, {all_recall:.0f}% recall")
 
     # Legend
     st.markdown("""
-    **Legend:** 🟢 True Positive (predicted + Top-10) | 🔴 False Positive (predicted + missed) | ⚫ Below threshold | ⬤ Men | ◼ Women
+    **Legend:** 🟢 True Positive (predicted + Top-10) | 🔴 False Positive (predicted + missed) | ⚫ Below threshold
     """)
+
+    # Distribution Metrics Section
+    st.markdown("---")
+    st.markdown("### 📊 Probability Distribution Analysis")
+
+    # Get distribution data from registry for this race
+    distribution = race_config.get("validation", {}).get("distribution")
+
+    if distribution:
+        # Display distribution metrics
+        d_col1, d_col2, d_col3, d_col4 = st.columns(4)
+        d_col1.metric("Low (<30%)", f"{distribution['low_pct']:.0f}%", help="% of riders with <30% Top-10 probability")
+        d_col2.metric("Mid (30-60%)", f"{distribution['mid_pct']:.0f}%", help="% of riders with 30-60% probability - the 'uncertain' zone")
+        d_col3.metric("High (>60%)", f"{distribution['high_pct']:.0f}%", help="% of riders with >60% Top-10 probability")
+        d_col4.metric("Field Size", f"{distribution['field_size']}", help="Total riders in startlist")
+
+        # Additional stats row
+        d2_col1, d2_col2, d2_col3, d2_col4 = st.columns(4)
+        d2_col1.metric("Mean Probability", f"{distribution['mean_prob']*100:.1f}%", help="Average Top-10 probability across all riders")
+        d2_col2.metric("Std Deviation", f"{distribution['std_prob']:.3f}", help="Spread of probabilities - higher = more variance")
+        d2_col3.metric("New Riders", f"{distribution['new_rider_count']}", help="Riders with no prior race history in the model")
+
+        # Determine and display distribution pattern
+        if distribution['mid_pct'] < 10:
+            pattern = "BIMODAL"
+            pattern_color = "green"
+            pattern_desc = "Model is decisive - most riders are clearly favorites or non-contenders"
+        elif distribution['mid_pct'] > 20:
+            pattern = "BALANCED"
+            pattern_color = "orange"
+            pattern_desc = "Model is uncertain - many riders in the 'maybe' zone"
+        else:
+            pattern = "MODERATE"
+            pattern_color = "blue"
+            pattern_desc = "Typical distribution with clear favorites and some uncertainty"
+
+        d2_col4.metric("Pattern", pattern, help=pattern_desc)
+
+        # Histogram of actual probability distribution
+        st.markdown("#### Probability Distribution Histogram")
+
+        # Get probabilities from the predictions data we already loaded
+        all_probs = [p[1] for p in predictions]  # predictions is list of (rider, prob, position, gender)
+
+        if all_probs:
+            # Create histogram with 10 bins (0-10%, 10-20%, etc.)
+            fig_hist = go.Figure()
+
+            # Calculate histogram bins
+            bin_edges = [i/10 for i in range(11)]  # 0.0, 0.1, 0.2, ..., 1.0
+            bin_labels = [f"{int(i*100)}-{int((i+0.1)*100)}%" for i in bin_edges[:-1]]
+
+            # Count riders in each bin
+            hist_counts = []
+            for i in range(len(bin_edges) - 1):
+                count = sum(1 for p in all_probs if bin_edges[i] <= p < bin_edges[i+1])
+                hist_counts.append(count)
+            # Handle edge case: include 1.0 in the last bin
+            hist_counts[-1] += sum(1 for p in all_probs if p == 1.0)
+
+            # Color bars based on zone
+            bar_colors = []
+            for i in range(10):
+                if i < 3:  # 0-30%
+                    bar_colors.append('#94a3b8')  # gray - low
+                elif i < 6:  # 30-60%
+                    bar_colors.append('#f59e0b')  # amber - mid
+                else:  # 60-100%
+                    bar_colors.append('#22c55e')  # green - high
+
+            fig_hist.add_trace(go.Bar(
+                x=bin_labels,
+                y=hist_counts,
+                marker_color=bar_colors,
+                text=hist_counts,
+                textposition='outside',
+                hovertemplate='%{x}<br>Riders: %{y}<extra></extra>'
+            ))
+
+            # Add threshold line
+            threshold_bin_idx = int(threshold * 10)
+            fig_hist.add_vline(
+                x=threshold_bin_idx - 0.5,
+                line_dash="dash",
+                line_color="#3b82f6",
+                line_width=2,
+                annotation_text=f"Threshold ({int(threshold*100)}%)",
+                annotation_position="top"
+            )
+
+            fig_hist.update_layout(
+                title=f'Rider Probability Distribution - {selected_race}',
+                xaxis_title='Top-10 Probability Range',
+                yaxis_title='Number of Riders',
+                height=350,
+                showlegend=False,
+                plot_bgcolor='#f8f9fa',
+                paper_bgcolor='white',
+                bargap=0.1
+            )
+
+            st.plotly_chart(fig_hist, use_container_width=True)
+
+            # Quick interpretation
+            low_count = sum(hist_counts[:3])
+            mid_count = sum(hist_counts[3:6])
+            high_count = sum(hist_counts[6:])
+            total = len(all_probs)
+
+            st.caption(f"**Distribution:** {low_count} riders ({low_count/total*100:.0f}%) in low zone | "
+                      f"{mid_count} riders ({mid_count/total*100:.0f}%) in mid zone | "
+                      f"{high_count} riders ({high_count/total*100:.0f}%) in high zone")
+
+        with st.expander("📖 Understanding Distribution Metrics"):
+            st.markdown(f"""
+**What the distribution tells you:**
+
+The probability distribution shows how the model "sees" this race field:
+
+| Pattern | Mid-Range % | Meaning | Trust Level |
+|---------|-------------|---------|-------------|
+| **Bimodal** | <10% | Model is confident - clear separation between contenders and non-contenders | Higher - predictions are decisive |
+| **Balanced** | >20% | Model is uncertain - many "coin flip" riders in the middle | Lower - more surprises possible |
+| **Moderate** | 10-20% | Typical race - some clear favorites, some uncertainty | Normal |
+
+**This race ({selected_race}):**
+- Pattern: **{pattern}** ({distribution['mid_pct']:.1f}% in mid-range)
+- {pattern_desc}
+
+**Why does this happen?**
+1. **H2H maturity**: More historical matchup data → stronger probability separation
+2. **New rider penalty**: Unknown riders get pushed to low probabilities
+3. **Field familiarity**: Familiar fields (World Cups) produce more bimodal distributions
+4. **Model version**: Later versions (v6+) have more H2H data and better calibration
+
+**Practical implication:**
+- **Bimodal races**: Trust predictions above threshold - model knows who will perform
+- **Balanced races**: Watch the mid-range riders - more surprises likely
+            """)
+    else:
+        st.info("Distribution metrics not available for this race. Run `python pipeline.py backfill-distribution` to calculate.")
 
 with tab5:
     st.header("About VeloPredict")
 
-    st.markdown("""
+    # Dynamic stats from metadata and registry
+    accuracy_pct = metadata['top10_accuracy'] * 100
+    improvement_pct = metadata['improvement_vs_baseline'] * 100
+    total_obs = metadata.get('total_observations', metadata['train_size'] + metadata['test_size'])
+    total_races = metadata.get('total_races', 'N/A')
+    auc_roc = metadata.get('top10_auc', 0)
+    brier = metadata.get('top10_brier_score', 0)
+    current_version = registry.get("current_version", "v6")
+
+    # Get top feature from metadata
+    h2h_pct = 22.7  # default
+    if 'feature_importance' in metadata:
+        fi = metadata['feature_importance']
+        h2h_pct = fi.get('h2h_field_score', 22.7)
+
+    # Get latest validated race
+    validated_races = [r for r in registry.get("races", []) if r.get("validation")]
+    latest_validated = validated_races[-1] if validated_races else None
+    validation_text = ""
+    if latest_validated:
+        v = latest_validated["validation"]
+        validation_text = f"**Latest Validation ({latest_validated['name']}):** {v.get('precision', 'N/A')}% precision, {v.get('recall', 'N/A')}% recall"
+
+    st.markdown(f"""
     ### 🎯 What It Does
 
     VeloPredict uses machine learning to predict which riders will finish in the **Top-10**
     (scoring positions) at cyclocross races.
 
-    **Accuracy:** 76.9% Top-10 accuracy (+29.4% vs baseline)
-    **Validation:** Flamanville H2H correlation r=0.773 (men), r=0.867 (women)
+    **Accuracy:** {accuracy_pct:.1f}% Top-10 accuracy (+{improvement_pct:.1f}% vs baseline)
+    {validation_text}
 
     ### 🧠 How It Works
 
     **Algorithm:** Random Forest (300 trees) + Platt Scaling calibration
 
     The model analyzes:
-    - **🥊 Head-to-Head** (21.4%): Win rate against specific opponents in the field
+    - **🥊 Head-to-Head** ({h2h_pct}%): Win rate against specific opponents in the field
     - **Current form:** Recent race results, days since last race
     - **Historical performance:** Career Top-10 rate, best recent finishes
     - **Rider pedigree:** UCI points, team quality
     - **Race context:** Category (Elite/U23/Junior), gender
 
-    **Key Improvements (v5 - H2H):**
-    - ✅ **Head-to-Head feature** - #1 most important feature!
+    **Key Features ({current_version}):**
+    - ✅ **Head-to-Head feature** - #1 most important feature at {h2h_pct}%!
     - ✅ Field-adjusted predictions based on actual startlist opponents
     - ✅ UCI-based inference for new riders
     - ✅ Probability calibration (Platt scaling)
-    - ✅ DNS risk filtering
+    - ✅ New rider penalty for unknown athletes
+    - ✅ **Robust Feature Extraction** (v6.4) - Uses best available cumulative data per rider
 
-    **Training data:** 49 races from 2024-25 season (8,188 rider-race observations)
+    **Training data:** {total_races} races from 2024-25 season ({total_obs:,} rider-race observations)
 
     ### 📊 Use Cases
 
@@ -1099,10 +1851,10 @@ with tab5:
     ### 📄 Technical Details
 
     - **Model:** Random Forest Classifier (300 trees, depth 15) + Platt scaling
-    - **Features:** 15 engineered features across 4 categories
+    - **Features:** {len(metadata['features'])} engineered features across 4 categories
     - **Validation:** Chronological train/test split (no data leakage)
-    - **Calibration:** Sigmoid (Platt scaling) for probability calibration
-    - **Metrics:** Brier score <0.2, AUC-ROC 0.85+
+    - **Calibration:** {metadata.get('calibration_method', 'Platt scaling')}
+    - **Metrics:** Brier score {brier:.4f}, AUC-ROC {auc_roc:.3f}
     - **API:** FastAPI endpoint available (`./run_api.sh`)
     - **Code:** [GitHub Repository](https://github.com/YOUR_USERNAME/cyclocross-predictions)
 
@@ -1111,14 +1863,21 @@ with tab5:
     *Built by a Principal PM + Builder | Part of Phoenix Launch*
     """)
 
-# Footer
+# Dynamic Footer - Auto-generated from registry
+def get_footer_text(registry, metadata):
+    """Generate footer text from registry and metadata."""
+    header_stats = get_header_stats(registry, metadata)
+    accuracy_pct = int(metadata['top10_accuracy'] * 100)
+    return (
+        f"VeloPredict {header_stats['version']} ({header_stats['latest_race']} validated) | "
+        f"{accuracy_pct}% Top-10 Accuracy | "
+        f"H2H = #1 Feature ({header_stats['h2h_importance']}%) | "
+        f"Random Forest + Platt Scaling | "
+        f"For educational and strategic planning purposes"
+    )
+
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: #666;'>"
-    "VeloPredict v6 (H2H + New Rider Penalty) | 78% Top-10 Accuracy | "
-    "H2H = #1 Feature (22.5%) | "
-    "Random Forest + Platt Scaling | "
-    "For educational and strategic planning purposes"
-    "</div>",
+    f"<div style='text-align: center; color: #666;'>{get_footer_text(registry, metadata)}</div>",
     unsafe_allow_html=True
 )

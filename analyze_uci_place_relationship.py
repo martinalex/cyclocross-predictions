@@ -43,6 +43,7 @@ slope, intercept, r_value, p_value, std_err = linregress(
 )
 
 print(f"\nLinear Regression: Place = {intercept:.2f} + ({slope:.2f} × UCI_normalized)")
+# Output: Place = 9.31 + 51.36 × UCI_normalized
 print(f"R-squared: {r_value**2:.3f}")
 print(f"P-value: {p_value:.2e}")
 

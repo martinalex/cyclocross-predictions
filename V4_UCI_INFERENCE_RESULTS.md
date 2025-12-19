@@ -94,13 +94,13 @@ Correlation = 0.398 (moderate positive)
 
 ### Actual Performance by UCI Tier
 
-| UCI Normalized | Avg Place | Top-10 Rate | Interpretation |
-|---------------|-----------|-------------|----------------|
-| 0.0-0.2 (LOW = STRONG) | **9.2** | **69.7%** | Strong finisher! |
-| 0.2-0.4 | 26.7 | 24.3% | Decent |
-| 0.4-0.6 | 33.5 | 6.1% | Below average |
-| 0.6-0.8 (HIGH = WEAK) | 41.8 | 0.9% | Weak |
-| 0.8-1.0 (HIGHEST = WEAKEST) | **45.7** | **0.0%** | Very weak |
+| UCI Normalized                | Avg Place | Top-10 Rate   | Interpretation |
+|-------------------------------|-----------|---------------|----------------|
+| 0.0-0.2 (LOW = STRONG)        | **9.2**   | **69.7%**     | Strong finisher! |
+| 0.2-0.4                       | 26.7      | 24.3%         | Decent |
+| 0.4-0.6                       | 33.5      | 6.1%          | Below average |
+| 0.6-0.8 (HIGH = WEAK)         | 41.8      | 0.9%          | Weak |
+| 0.8-1.0 (HIGHEST = WEAKEST)   | **45.7**  | **0.0%**      | Very weak |
 
 **Conclusion:** UCI Carried Points are inverted (lower = better). Low normalized = strong rider = low place number.
 
