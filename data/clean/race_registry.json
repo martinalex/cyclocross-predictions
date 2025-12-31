@@ -154,6 +154,358 @@
           "field_size": 121
         }
       }
+    },
+    {
+      "id": "antwerpen_2025-12-20",
+      "name": "Antwerpen",
+      "date": "2025-12-20",
+      "series": "UCI World Cup",
+      "version": "v6.4",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_antwerpen_men_2025-12-20.csv",
+        "Women Elite": "data/clean/predictions_antwerpen_women_2025-12-20.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-WC__ Antwerpen__Men-Elite__2025-12-20__ Antwerpen -BELGIUM.csv",
+        "Women Elite": "data/results/Results__UCI-WC__ Antwerpen__Women-Elite__2025-12-20__ Antwerpen -BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "precision": 72.7,
+          "recall": 80.0,
+          "high_conf_accuracy": 70.0,
+          "hits_10": 6,
+          "hits_3": 1,
+          "spearman": 0.08,
+          "mae_rank": 6.0
+        },
+        "distribution": {
+          "low_pct": 78.2,
+          "mid_pct": 5.1,
+          "high_pct": 16.7,
+          "mean_prob": 0.196,
+          "std_prob": 0.341,
+          "new_rider_count": 0,
+          "field_size": 78
+        },
+        "women_elite": {
+          "precision": 76.9,
+          "recall": 100.0,
+          "high_conf_accuracy": 75.0,
+          "hits_10": 7,
+          "hits_3": 2,
+          "spearman": 0.78,
+          "mae_rank": 3.4
+        }
+      }
+    },
+    {
+      "id": "koksijde_2025-12-21",
+      "name": "Koksijde",
+      "date": "2025-12-21",
+      "series": "UCI World Cup",
+      "version": "v6.5",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_startlist_men_elite_20251221_1009.csv",
+        "Women Elite": "data/clean/predictions_startlist_women_elite_20251221_1009.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-WC__ Koksijde__Men-Elite__2025-12-21__ Koksijde -BELGIUM.csv",
+        "Women Elite": "data/results/Results__UCI-WC__ Koksijde__Women-Elite__2025-12-21__ Koksijde -BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "hits_10": 7,
+          "hits_3": 2,
+          "spearman": 0.68,
+          "mae_rank": 2.0
+        },
+        "women_elite": {
+          "hits_10": 9,
+          "hits_3": 2,
+          "spearman": 0.67,
+          "mae_rank": 1.7
+        },
+        "distribution": {
+          "low_pct": 84.8,
+          "mid_pct": 2.6,
+          "high_pct": 12.6,
+          "mean_prob": 0.15,
+          "std_prob": 0.319,
+          "new_rider_count": 2,
+          "field_size": 145
+        },
+        "notes": "Best race yet - 16/20 hits, all targets met"
+      }
+    },
+    {
+      "id": "hofstade_2025-12-22",
+      "name": "Hofstade",
+      "date": "2025-12-22",
+      "series": "X2O Trofee",
+      "version": "v6.6",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_hofstade_men_elite_20251222_1243.csv",
+        "Women Elite": "data/clean/predictions_hofstade_women_elite_20251222_1243.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__X2O-Trofee__ Hofstade__Men-Elite__2025-12-22__ Hofstade -BELGIUM.csv",
+        "Women Elite": "data/results/Results__X2O-Trofee__ Hofstade__Women-Elite__2025-12-22__ Hofstade -BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "precision": 87.5,
+          "recall": 70.0,
+          "high_conf_accuracy": 83.3,
+          "hits_10": 8,
+          "hits_3": 2,
+          "spearman": 0.53,
+          "mae_rank": 2.6
+        },
+        "distribution": {
+          "low_pct": 96.6,
+          "mid_pct": 0.0,
+          "high_pct": 3.4,
+          "mean_prob": 0.051,
+          "std_prob": 0.179,
+          "new_rider_count": 0,
+          "field_size": 58
+        },
+        "women_elite": {
+          "precision": 100.0,
+          "recall": 20.0,
+          "high_conf_accuracy": 100.0,
+          "hits_10": 7,
+          "hits_3": 1,
+          "spearman": 0.78,
+          "mae_rank": 2.8
+        }
+      }
+    },
+    {
+      "id": "heusden-zolder_2025-12-26",
+      "name": "Heusden-Zolder",
+      "date": "2025-12-26",
+      "series": "Superprestige",
+      "version": "v6.7",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_heusden-zolder_men_elite_20251222_1612.csv",
+        "Women Elite": "data/clean/predictions_heusden-zolder_women_elite_20251222_1612.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__Superprestige__ HEUSDEN-ZOLDER__Men-Elite__2025-12-26__ HEUSDEN-ZOLDER-BELGIUM.csv",
+        "Women Elite": "data/results/Results__Superprestige__ HEUSDEN-ZOLDER__Women-Elite__2025-12-26__ HEUSDEN-ZOLDER-BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "hits_10": 5,
+          "hits_3": 2,
+          "spearman": 0.68,
+          "mae_rank": 4.9
+        },
+        "women_elite": {
+          "hits_10": 6,
+          "hits_3": 2,
+          "spearman": 0.69,
+          "mae_rank": 4.9
+        },
+        "distribution": {
+          "low_pct": 89.3,
+          "mid_pct": 1.7,
+          "high_pct": 9.1,
+          "mean_prob": 0.13,
+          "std_prob": 0.29,
+          "new_rider_count": 0,
+          "field_size": 176
+        },
+        "notes": "3 DNS in ME, NYS P14, DEL GROSSO breakout P1"
+      }
+    },
+    {
+      "id": "gavere_2025-12-26",
+      "name": "Gavere",
+      "date": "2025-12-26",
+      "series": "UCI WC",
+      "version": "v6.8",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_gavere_men_elite_20251226_2126.csv",
+        "Women Elite": "data/clean/predictions_gavere_women_elite_20251226_2127.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-WC__ Gavere__Men-Elite__2025-12-26__ Gavere -BELGIUM.csv",
+        "Women Elite": "data/results/Results__UCI-WC__ Gavere__Women-Elite__2025-12-26__ Gavere -BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "precision": 70.0,
+          "recall": 70.0,
+          "high_conf_accuracy": 62.5,
+          "hits_10": 6,
+          "hits_3": 2,
+          "spearman": 0.33,
+          "mae_rank": 5.7
+        },
+        "distribution": {
+          "low_pct": 75.4,
+          "mid_pct": 1.6,
+          "high_pct": 23.0,
+          "mean_prob": 0.235,
+          "std_prob": 0.379,
+          "new_rider_count": 0,
+          "field_size": 61
+        },
+        "women_elite": {
+          "precision": 50.0,
+          "recall": 70.0,
+          "high_conf_accuracy": 58.3,
+          "hits_10": 7,
+          "hits_3": 2,
+          "spearman": 0.61,
+          "mae_rank": 4.5
+        }
+      }
+    },
+    {
+      "id": "dendermonde_2025-12-28",
+      "name": "Dendermonde",
+      "date": "2025-12-28",
+      "series": "UCI WC",
+      "version": "v6.9",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_dendermonde_men_elite_20251227_2329.csv",
+        "Women Elite": "data/clean/predictions_dendermonde_women_elite_20251227_2329.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__UCI-WC__ Dendermonde__Men-Elite__2025-12-28__ Dendermonde -BELGIUM.csv",
+        "Women Elite": "data/results/Results__UCI-WC__ Dendermonde__Women-Elite__2025-12-28__ Dendermonde -BELGIUM.csv"
+      },
+      "validation": {
+        "women_elite": {
+          "precision": 66.7,
+          "recall": 80.0,
+          "high_conf_accuracy": 66.7,
+          "hits_10": 7,
+          "hits_3": 2,
+          "spearman": 0.68,
+          "mae_rank": 2.3
+        },
+        "distribution": {
+          "low_pct": 69.2,
+          "mid_pct": 11.5,
+          "high_pct": 19.2,
+          "mean_prob": 0.228,
+          "std_prob": 0.362,
+          "new_rider_count": 0,
+          "field_size": 52
+        },
+        "men_elite": {
+          "precision": 72.7,
+          "recall": 80.0,
+          "high_conf_accuracy": 87.5,
+          "hits_10": 8,
+          "hits_3": 2,
+          "spearman": 0.27,
+          "mae_rank": 3.8
+        }
+      }
+    },
+    {
+      "id": "azencross-loenhout_2025-12-29",
+      "name": "Azencross-Loenhout",
+      "date": "2025-12-29",
+      "series": "X2O Trofee",
+      "version": "v6.10",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_azencross-loenhout_men_elite_20251228_2257.csv",
+        "Women Elite": "data/clean/predictions_azencross-loenhout_women_elite_20251228_2257.csv"
+      },
+      "predictions_ltr": {
+        "Men Elite": "data/clean/predictions_ltr_azencross-loenhout_men_elite_20251229.csv",
+        "Women Elite": "data/clean/predictions_ltr_azencross-loenhout_women_elite_20251229.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__X2O-Trofee__ AZENCROSS-LOENHOUT__Men-Elite__2025-12-29__ LOENHOUT-BELGIUM.csv",
+        "Women Elite": "data/results/Results__X2O-Trofee__ AZENCROSS-LOENHOUT__Women-Elite__2025-12-29__ LOENHOUT-BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "hits_10": 6,
+          "hits_3": 2,
+          "spearman": 0.64,
+          "mae_rank": 2.7
+        },
+        "women_elite": {
+          "hits_10": 6,
+          "hits_3": 1,
+          "spearman": 0.47,
+          "mae_rank": 4.3
+        },
+        "ltr_men_elite": {
+          "hits_10": 6,
+          "hits_3": 1,
+          "spearman": 0.61,
+          "mae_rank": 3.0
+        },
+        "ltr_women_elite": {
+          "hits_10": 8,
+          "hits_3": 1,
+          "spearman": 0.47,
+          "mae_rank": 2.3
+        },
+        "notes": "LTR A/B test: v6.10 won ME, LTR won WE (8/10 vs 6/10). 3 DNS in ME."
+      }
+    },
+    {
+      "id": "diegem_2025-12-30",
+      "name": "Diegem",
+      "date": "2025-12-30",
+      "series": "Superprestige",
+      "version": "v6.12",
+      "threshold": 0.55,
+      "predictions": {
+        "Men Elite": "data/clean/predictions_diegem_men_elite_20251229.csv",
+        "Women Elite": "data/clean/predictions_diegem_women_elite_20251229.csv"
+      },
+      "results": {
+        "Men Elite": "data/results/Results__Superprestige__ Diegem__Men-Elite__2025-12-30__ Diegem-BELGIUM.csv",
+        "Women Elite": "data/results/Results__Superprestige__ Diegem__Women-Elite__2025-12-30__ Diegem-BELGIUM.csv"
+      },
+      "validation": {
+        "men_elite": {
+          "precision": 85.7,
+          "recall": 60.0,
+          "high_conf_accuracy": 83.3,
+          "hits_10": 6,
+          "hits_3": 2,
+          "spearman": 0.9,
+          "mae_rank": 2.9
+        },
+        "distribution": {
+          "low_pct": 90.3,
+          "mid_pct": 4.2,
+          "high_pct": 5.6,
+          "mean_prob": 0.096,
+          "std_prob": 0.24,
+          "new_rider_count": 0,
+          "field_size": 72
+        },
+        "women_elite": {
+          "precision": 80.0,
+          "recall": 40.0,
+          "high_conf_accuracy": 100.0,
+          "hits_10": 5,
+          "hits_3": 2,
+          "spearman": 0.37,
+          "mae_rank": 3.5
+        }
+      }
     }
   ],
   "model_versions": [
@@ -219,7 +571,72 @@
       "auc": 0.833,
       "observations": 8950,
       "innovation": "Robust Feature Extraction"
+    },
+    {
+      "version": "v6.5",
+      "accuracy": 82.0,
+      "auc": 0.817,
+      "observations": 9114,
+      "innovation": "+Antwerpen Results"
+    },
+    {
+      "version": "v6.6",
+      "accuracy": 81.1,
+      "auc": 0.813,
+      "observations": 9235,
+      "innovation": "+Koksijde Results"
+    },
+    {
+      "version": "v6.7",
+      "date": "2025-12-22",
+      "accuracy": 0.812,
+      "observations": 9355,
+      "notes": "+Hofstade Results"
+    },
+    {
+      "version": "v6.8",
+      "date": "2025-12-26",
+      "accuracy": 0.81,
+      "auc": 0.79,
+      "observations": 9465,
+      "notes": "+Heusden-Zolder Results"
+    },
+    {
+      "version": "v6.9",
+      "date": "2025-12-27",
+      "accuracy": 0.801,
+      "auc": 0.783,
+      "observations": 9589,
+      "notes": "+Gavere Results"
+    },
+    {
+      "version": "v6.10",
+      "accuracy": 0.8047276464542652,
+      "auc": 0.7723500797735151,
+      "observations": 9729,
+      "innovation": "+Dendermonde Results"
+    },
+    {
+      "version": "v6.11",
+      "accuracy": 0.8098159509202454,
+      "auc": 0.7732467318301751,
+      "observations": 9777,
+      "innovation": "+Azencross-Loenhout Results"
+    },
+    {
+      "version": "v6.12",
+      "accuracy": 0.7918781725888325,
+      "auc": 0.7667592872244036,
+      "observations": 9848,
+      "innovation": "+Azencross-Loenhout Results"
+    },
+    {
+      "version": "v6.13",
+      "accuracy": 0.7963981990995498,
+      "auc": 0.7345458652041704,
+      "observations": 9994,
+      "innovation": "+Diegem Results"
     }
   ],
-  "current_version": "v6.4"
+  "current_version": "v6.13"
 }

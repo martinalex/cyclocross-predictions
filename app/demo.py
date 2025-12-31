@@ -217,7 +217,7 @@ with st.sidebar:
         """)
 
 # Main content
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔮 Predict Race", "📊 Model Performance", "📈 Model Insights", "📊 Season Tracker", "📚 About"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔮 Predict Race", "📊 Model Performance", "📈 Model Insights", "📊 Season Tracker", "🧪 LTR A/B Test", "📚 About"])
 
 with tab1:
     st.header("Predict Top-10 Finishers")
@@ -1765,6 +1765,195 @@ The probability distribution shows how the model "sees" this race field:
         st.info("Distribution metrics not available for this race. Run `python pipeline.py backfill-distribution` to calculate.")
 
 with tab5:
+    st.header("🧪 LTR A/B Test: v6.x vs v7.1-LTR")
+    st.markdown("**Comparing Binary Classification (v6.x) vs Learning-to-Rank (v7.1-LTR)**")
+
+    # Load LTR validation results
+    ltr_results_path = config.CLEAN_DIR / "ltr_validation_results.json"
+    if ltr_results_path.exists():
+        with open(ltr_results_path, 'r') as f:
+            ltr_data = json.load(f)
+
+        validations = ltr_data.get("validations", [])
+        aggregate = ltr_data.get("aggregate", {})
+
+        if validations:
+            # Summary metrics
+            st.markdown("### Aggregate Results")
+
+            agg_col1, agg_col2, agg_col3, agg_col4 = st.columns(4)
+
+            v6_h10 = aggregate.get("v6_hits10_total", 0)
+            ltr_h10 = aggregate.get("ltr_hits10_total", 0)
+            h10_possible = aggregate.get("v6_hits10_possible", 40)
+            h10_winner = "LTR" if ltr_h10 > v6_h10 else ("v6.x" if v6_h10 > ltr_h10 else "TIE")
+
+            v6_h3 = aggregate.get("v6_hits3_total", 0)
+            ltr_h3 = aggregate.get("ltr_hits3_total", 0)
+            h3_possible = aggregate.get("v6_hits3_possible", 12)
+            h3_winner = "LTR" if ltr_h3 > v6_h3 else ("v6.x" if v6_h3 > ltr_h3 else "TIE")
+
+            v6_mae = aggregate.get("v6_avg_mae", 0)
+            ltr_mae = aggregate.get("ltr_avg_mae", 0)
+            mae_winner = "LTR" if ltr_mae < v6_mae else ("v6.x" if v6_mae < ltr_mae else "TIE")
+
+            v6_wins = aggregate.get("v6_wins", 0)
+            ltr_wins = aggregate.get("ltr_wins", 0)
+            ties = aggregate.get("ties", 0)
+
+            agg_col1.metric("Hits@10", f"LTR: {ltr_h10}/{h10_possible}", f"v6.x: {v6_h10}/{h10_possible}")
+            agg_col2.metric("Hits@3", f"v6.x: {v6_h3}/{h3_possible}", f"LTR: {ltr_h3}/{h3_possible}")
+            agg_col3.metric("Avg MAE", f"LTR: {ltr_mae:.2f}", f"v6.x: {v6_mae:.2f}")
+            agg_col4.metric("Race Wins", f"LTR: {ltr_wins}", f"v6.x: {v6_wins}, Ties: {ties}")
+
+            # Overall winner
+            if ltr_wins > v6_wins:
+                overall = f"**v7.1-LTR wins {ltr_wins}-{v6_wins}-{ties}**"
+                st.success(f"🏆 {overall}")
+            elif v6_wins > ltr_wins:
+                overall = f"**v6.x wins {v6_wins}-{ltr_wins}-{ties}**"
+                st.info(f"🏆 {overall}")
+            else:
+                st.warning(f"🤝 **TIE: {v6_wins}-{ltr_wins}-{ties}**")
+
+            st.markdown("---")
+
+            # Race-by-race comparison chart
+            st.markdown("### Race-by-Race Comparison")
+
+            # Prepare data for chart
+            race_labels = []
+            v6_hits10 = []
+            ltr_hits10 = []
+            winners = []
+
+            for v in validations:
+                label = f"{v['race']} ({v['category'][:3]})"
+                race_labels.append(label)
+                v6_hits10.append(v['v6_hits10'])
+                ltr_hits10.append(v['ltr_hits10'])
+                winners.append(v['winner'])
+
+            # Create grouped bar chart
+            fig_compare = go.Figure()
+
+            fig_compare.add_trace(go.Bar(
+                name='v6.x',
+                x=race_labels,
+                y=v6_hits10,
+                marker_color='#3b82f6',
+                text=v6_hits10,
+                textposition='outside',
+                hovertemplate='%{x}<br>v6.x: %{y}/10<extra></extra>'
+            ))
+
+            fig_compare.add_trace(go.Bar(
+                name='v7.1-LTR',
+                x=race_labels,
+                y=ltr_hits10,
+                marker_color='#22c55e',
+                text=ltr_hits10,
+                textposition='outside',
+                hovertemplate='%{x}<br>LTR: %{y}/10<extra></extra>'
+            ))
+
+            # Add target line
+            fig_compare.add_hline(y=7, line_dash="dash", line_color="#f59e0b", line_width=2,
+                                  annotation_text="Target (7/10)", annotation_position="right")
+
+            fig_compare.update_layout(
+                title='Hits@10 Comparison by Race',
+                height=400,
+                barmode='group',
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+                yaxis=dict(range=[0, 11], title="Hits@10", dtick=2),
+                xaxis=dict(tickangle=45),
+                plot_bgcolor='#f8f9fa',
+                paper_bgcolor='white',
+                margin=dict(b=100)
+            )
+
+            st.plotly_chart(fig_compare, use_container_width=True)
+
+            # Detailed results table
+            st.markdown("### Detailed Validation Results")
+
+            table_data = []
+            for v in validations:
+                # Determine metric winners
+                h10_w = "LTR" if v['ltr_hits10'] > v['v6_hits10'] else ("v6.x" if v['v6_hits10'] > v['ltr_hits10'] else "TIE")
+                h3_w = "LTR" if v['ltr_hits3'] > v['v6_hits3'] else ("v6.x" if v['v6_hits3'] > v['ltr_hits3'] else "TIE")
+                sp_w = "LTR" if v['ltr_spearman'] > v['v6_spearman'] else ("v6.x" if v['v6_spearman'] > v['ltr_spearman'] else "TIE")
+                mae_w = "LTR" if v['ltr_mae'] < v['v6_mae'] else ("v6.x" if v['v6_mae'] < v['ltr_mae'] else "TIE")
+
+                table_data.append({
+                    "Race": v['race'],
+                    "Date": v['date'],
+                    "Category": v['category'],
+                    "v6.x Hits@10": f"{v['v6_hits10']}/10",
+                    "LTR Hits@10": f"{v['ltr_hits10']}/10",
+                    "v6.x Hits@3": f"{v['v6_hits3']}/3",
+                    "LTR Hits@3": f"{v['ltr_hits3']}/3",
+                    "v6.x MAE": v['v6_mae'],
+                    "LTR MAE": v['ltr_mae'],
+                    "Winner": v['winner']
+                })
+
+            table_df = pd.DataFrame(table_data)
+            st.dataframe(table_df, use_container_width=True, hide_index=True)
+
+            # Key insights
+            st.markdown("### Key Insights")
+
+            insights_col1, insights_col2 = st.columns(2)
+
+            with insights_col1:
+                st.markdown("**LTR Strengths:**")
+                st.markdown("""
+                - Better at Hits@10 (identifying more top-10 finishers)
+                - Lower MAE (predictions closer to actual positions)
+                - Optimizes for ranking, not just classification
+                """)
+
+            with insights_col2:
+                st.markdown("**v6.x Strengths:**")
+                st.markdown("""
+                - Better at Hits@3 (podium predictions)
+                - More conservative, higher precision
+                - Calibrated probabilities for decision-making
+                """)
+
+            with st.expander("📖 Understanding the A/B Test"):
+                st.markdown("""
+**What are we comparing?**
+
+| Model | Type | Approach |
+|-------|------|----------|
+| **v6.x** | Binary Classification | Predicts probability of Top-10 finish (yes/no) |
+| **v7.1-LTR** | Learning-to-Rank | Optimizes ranking order directly using LambdaMART |
+
+**Metrics Explained:**
+- **Hits@10**: How many of our top-10 predictions finished in actual top-10? (X/10)
+- **Hits@3**: How many of our top-3 picks made the actual podium? (X/3)
+- **Spearman ρ**: Rank correlation (-1 to +1, higher = better ordering)
+- **MAE Rank**: Average positions off (lower = better)
+
+**Winner Determination:**
+Each race compares 4 metrics. The model winning more metrics wins the race.
+Ties count as ties. Overall winner = model with more race wins.
+
+**Why LTR might be better for Hits@10:**
+LTR directly optimizes for ranking position, not probability calibration.
+It learns "who beats whom" rather than "is this person Top-10 material?"
+                """)
+
+        else:
+            st.info("No LTR validation results yet. Run `python pipeline.py validate-race-ltr` to add results.")
+    else:
+        st.warning("LTR validation results file not found. Run LTR validations to populate this tab.")
+
+with tab6:
     st.header("About VeloPredict")
 
     # Dynamic stats from metadata and registry

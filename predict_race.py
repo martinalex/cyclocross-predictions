@@ -153,27 +153,25 @@ def predict_race(
         h2h_str = f"H2H: {h2h_score*100:4.0f}%" if h2h_confidence > 0 else "H2H: N/A"
         print(f"  {confidence}  {rider_name:30s}  Top-10: {top10_prob:5.1%}  |  Podium: {top3_prob:5.1%}  |  {h2h_str}{dns_marker}")
 
-    # Sort by Top-10 probability
+    # Sort by Top-10 probability and add Predicted Rank
     df_predictions = pd.DataFrame(predictions).sort_values("Top-10 Probability", ascending=False)
+    df_predictions['Predicted Rank'] = range(1, len(df_predictions) + 1)
 
-    # Display results
+    # Display results - ALWAYS predict exactly 10 riders (v6.4+ methodology)
     print("\n" + "=" * 70)
     print("PREDICTED TOP-10 FINISHERS")
     print("=" * 70)
 
-    top10_predictions = df_predictions[
-        (df_predictions["Top-10 Probability"] > confidence_threshold) &
-        (df_predictions["DNS Risk"] == False)
-    ]
+    # Always take top 10 by probability, regardless of threshold
+    eligible = df_predictions[df_predictions["DNS Risk"] == False]
+    top10_predictions = eligible.nlargest(10, "Top-10 Probability")
 
-    for idx, row in top10_predictions.iterrows():
-        podium_icon = "  " if row["Top-3 Probability"] <= 0.5 else "  "
+    for rank, (idx, row) in enumerate(top10_predictions.iterrows(), 1):
         h2h_pct = row['H2H Field Score'] * 100 if row['H2H Confidence'] > 0 else 0
         h2h_str = f"(H2H: {h2h_pct:3.0f}%)" if row['H2H Confidence'] > 0.3 else "(H2H: N/A)"
-        print(f"{podium_icon} {row['Rider']:30s}  {row['Top-10 Probability']:5.1%} chance  {h2h_str}")
+        print(f"   {rank:2d}. {row['Rider']:30s}  {row['Top-10 Probability']:5.1%} chance  {h2h_str}")
 
-    print(f"\nTotal predicted Top-10: {len(top10_predictions)} riders")
-    print(f"(Using {confidence_threshold:.0%} confidence threshold)")
+    print(f"\nPredicted Top-10: 10 riders (fixed N=10, v6.4+ methodology)")
 
     # Show DNS risks
     dns_risks = df_predictions[df_predictions["DNS Risk"] == True]
@@ -217,16 +215,60 @@ def predict_race(
     df_predictions.to_csv(output_path, index=False)
     print(f"\nPredictions saved to: {output_path}")
 
+    # Probability Distribution Analysis (v6.4+ methodology)
+    print("\n" + "=" * 70)
+    print("PROBABILITY DISTRIBUTION ANALYSIS")
+    print("=" * 70)
+
+    probs = df_predictions['Top-10 Probability']
+    field_size = len(df_predictions)
+
+    low_count = len(probs[probs < 0.30])
+    mid_count = len(probs[(probs >= 0.30) & (probs < 0.60)])
+    high_count = len(probs[probs >= 0.60])
+
+    low_pct = low_count / field_size * 100
+    mid_pct = mid_count / field_size * 100
+    high_pct = high_count / field_size * 100
+
+    mean_prob = probs.mean()
+    std_prob = probs.std()
+
+    new_riders = len(df_predictions[df_predictions['Status'] == 'new_rider'])
+
+    # Determine pattern
+    if mid_pct < 10:
+        pattern = "BIMODAL"
+        pattern_desc = "Model is decisive - clear separation between contenders and non-contenders"
+    elif mid_pct > 20:
+        pattern = "BALANCED"
+        pattern_desc = "Model is uncertain - many riders in competitive range"
+    else:
+        pattern = "MODERATE"
+        pattern_desc = "Typical distribution with some uncertainty"
+
+    print(f"| Metric           | Value  | Interpretation        |")
+    print(f"|------------------|-------:|----------------------|")
+    print(f"| Low (<30%)       | {low_pct:5.1f}% | Non-contenders        |")
+    print(f"| Mid (30-60%)     | {mid_pct:5.1f}% | Uncertain zone        |")
+    print(f"| High (>60%)      | {high_pct:5.1f}% | Likely contenders     |")
+    print(f"| Mean Probability | {mean_prob*100:5.1f}% | Average across field  |")
+    print(f"| Std Deviation    | {std_prob:.3f} | Probability spread    |")
+    print(f"| New Riders       | {new_riders:5d} | No prior race history |")
+    print(f"| Field Size       | {field_size:5d} | Total riders          |")
+    print(f"\nPattern: {pattern}")
+    print(f"  {pattern_desc}")
+
     # Summary
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
     print(f"Riders analyzed: {len(df_predictions)}")
-    print(f"Predicted Top-10: {len(top10_predictions)} (threshold: {confidence_threshold:.0%})")
+    print(f"Predicted Top-10: 10 (fixed N=10)")
     print(f"High confidence (>70%): {len(df_predictions[df_predictions['Top-10 Probability'] > 0.7])}")
     print(f"DNS risks flagged: {len(dns_risks)}")
     print(f"Riders with history: {len(df_predictions[df_predictions['Status'] == 'found'])}")
-    print(f"New riders: {len(df_predictions[df_predictions['Status'] == 'new_rider'])}")
+    print(f"New riders: {new_riders}")
 
     # H2H stats
     h2h_coverage = df_predictions[df_predictions['H2H Confidence'] > 0.3]
@@ -238,7 +280,16 @@ def predict_race(
 
     print("\n" + "=" * 70)
 
-    return df_predictions
+    return df_predictions, {
+        'low_pct': low_pct,
+        'mid_pct': mid_pct,
+        'high_pct': high_pct,
+        'mean_prob': mean_prob,
+        'std_prob': std_prob,
+        'new_rider_count': new_riders,
+        'field_size': field_size,
+        'pattern': pattern
+    }
 
 
 if __name__ == "__main__":
@@ -252,7 +303,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    predictions = predict_race(
+    predictions, distribution = predict_race(
         args.startlist,
         args.category,
         args.output,

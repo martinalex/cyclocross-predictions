@@ -14,6 +14,8 @@ NAME_CORRECTIONS = {
     "michael vanhourenhout": "michael vanthourenhout",
     "mees hendrixx": "mees hendrikx",
     "remi lelannais": "remi lelandais",
+    # Women Elite - name variations in different sources
+    "ceylin alvarado": "ceylin del carmen alvarado",  # Results often truncate "del Carmen"
     # Add more corrections as discovered
 }
 

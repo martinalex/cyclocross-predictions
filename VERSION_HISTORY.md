@@ -1,7 +1,7 @@
 # VeloPredict: Complete Version History
 
 **Project Start:** November 2025
-**Current Version:** v6.4
+**Current Version:** v6.13
 **Total Iterations:** 1 migration + 6 major versions + multiple refinements
 
 ---
@@ -180,7 +180,16 @@ MAE: 0.072  # Looked good but meaningless - no variance!
 | **v6.1** | Dec 7 | Aligned tables + metrics explanation | 83.5% | Sardinia validated | Superseded |
 | **v6.2** | Dec 13 | **No DNS Exclusion** | 83.4% | 87.5% precision (Kortrijk) | Superseded |
 | **v6.3** | Dec 14 | **+Namur Results** | 82.6% | 75% precision (Namur) | Superseded |
-| **v6.4** | Dec 17 | **Robust Feature Extraction** | 82.6% | Pending (Antwerpen) | **Current** |
+| **v6.4** | Dec 17 | **Robust Feature Extraction** | 82.6% | 75% precision (Antwerpen) | Superseded |
+| **v6.5** | Dec 21 | **+Antwerpen Results** | 82.0% | Koksijde validated | Superseded |
+| **v6.6** | Dec 21 | **+Koksijde Results** | 81.1% | Hofstade validated | Superseded |
+| **v6.7** | Dec 22 | **+Hofstade Results** | 81.2% | Heusden-Zolder validated | Superseded |
+| **v6.8** | Dec 26 | **+Heusden-Zolder Results** | 81.0% | Gavere validated | Superseded |
+| **v6.9** | Dec 27 | **+Gavere Results** | 80.1% | Pending | Superseded |
+| **v6.10** | Dec 28 | **+Dendermonde Results** | 80.5% | Pending | Superseded |
+| **v6.11** | Dec 29 | **+Azencross-Loenhout Results** | 81.0% | Pending | Superseded |
+| **v6.12** | Dec 29 | **+Azencross-Loenhout Results** | 79.2% | Pending | Superseded |
+| **v6.13** | Dec 30 | **+Diegem Results** | 79.6% | Pending | **Current** |
 
 ---
 
@@ -959,26 +968,33 @@ Before diving into the numbers, here's what each metric actually tells you:
 | v5      | 76.9%      | ~57%      | 0.830     | 8,188        | **H2H feature**      |
 | v6      | 77.6%      | ~58%      | 0.835     | 8,357        | New rider penalty    |
 | v6.2    | 83.4%      | ~60%      | 0.850     | 8,849        | No DNS exclusion     |
-| v6.3    | **82.6%**  | ~58%      | **0.833** | **8,950**    | **+Namur Results**   |
+| v6.3    | 82.6%      | ~58%      | 0.833     | 8,950        | +Namur Results       |
+| v6.5    | 82.0%      | ~58%      | 0.817     | 9,114        | +Antwerpen Results   |
+| v6.6    | 81.1%      | ~58%      | 0.813     | 9,235        | +Koksijde Results        |
+| v6.7    | 81.2%      | ~58%      | 0.812     | 9,355        | +Hofstade Results        |
+| v6.8    | 81.0%      | ~58%      | 0.790     | 9,465        | +Heusden-Zolder Results  |
+| v6.9    | 80.1%      | ~58%      | 0.783     | 9,589        | +Gavere Results          |
+| v6.10   | **80.5%**  | ~58%      | **0.772** | **9,729**    | **+Dendermonde Results** |
 
 ### Live Validation
 
 **UCI World Cup Races (Strong Fields):**
 
-| Race        | Date   | Predicted With | Recall | Precision | Predictions | Notes                          |
-|-------------|--------|----------------|--------|-----------|-------------|--------------------------------|
-| Tabor       | Nov 23 | v1             | 90%    | 42%       | 43          | First test - over-predicted    |
-| Flamanville | Nov 30 | v2             | 80%    | 48%       | 33          | New rider false positives      |
-| Sardinia    | Dec 7  | v6             | 100%   | 100%      | 7           | High-conf only, H2H active     |
-| Namur       | Dec 14 | v6.1           | 60%    | 75%       | 16          | Belgian depth, NEFF surprise   |
+| Race        | Date   | Predicted With | Recall | Precision | Hits@10 | Notes                          |
+|-------------|--------|----------------|--------|-----------|---------|--------------------------------|
+| Tabor       | Nov 23 | v1             | 90%    | 42%       | 7/20    | First test - over-predicted    |
+| Flamanville | Nov 30 | v2             | 80%    | 48%       | 13/20   | New rider false positives      |
+| Sardinia    | Dec 7  | v6             | 100%   | 100%      | 13/20   | High-conf only, H2H active     |
+| Namur       | Dec 14 | v6.1           | 60%    | 75%       | 12/20   | Belgian depth, NEFF surprise   |
+| Antwerpen   | Dec 20 | v6.4           | 90%    | 75%       | 13/20   | NYS P23, VDH DNS, WE strong    |
 
 **B-Tier Races (Weaker Fields):**
 
-| Race        | Date   | Predicted With | Recall | Precision | Predictions | Notes                          |
-|-------------|--------|----------------|--------|-----------|-------------|--------------------------------|
-| Kortrijk    | Dec 13 | v6.1           | 35%    | 87.5%     | 8           | DNS flags hurt recall          |
+| Race        | Date   | Predicted With | Recall | Precision | Hits@10 | Notes                          |
+|-------------|--------|----------------|--------|-----------|---------|--------------------------------|
+| Kortrijk    | Dec 13 | v6.2           | 35%    | 87.5%     | 13/20   | DNS flags hurt recall          |
 
-**Key Insight:** Model excels at World Cup races with strong, predictable fields. B-tier races have more variance (DNS surprises, underdog breakthroughs). High-confidence predictions (>55%) are most reliable.
+**Key Insight:** Model excels at World Cup races with strong, predictable fields. B-tier races have more variance (DNS surprises, underdog breakthroughs). High-confidence predictions (>55%) are most reliable. Women Elite consistently outperforms Men Elite in rank correlation.
 
 ---
 
@@ -1418,39 +1434,78 @@ NEW: ANTWERPEN_PREDICTIONS_2025-12-20.md - First predictions with v6.4
 
 ---
 
-## 🎯 Current Status (Dec 17, 2025)
+## 🎯 Current Status (Dec 27, 2025)
 
-**Version:** v6.4
-**Training Complete:** ✅ Yes (same model as v6.3 - only inference logic changed)
-**Live Validation:** Pending (Antwerpen Dec 20)
+**Version:** v6.9
+**Training Complete:** ✅ Yes (retrained with Gavere results)
+**Live Validation:** ✅ Gavere validated (10 races total)
 **Model Files:** ✅ Saved and ready
 **Documentation:** ✅ Complete
 
-**v6.3 Namur Validation Results:**
-- ✅ **75% precision (12/16 predictions correct)**
-- ✅ **60% recall (12/20 actual Top-10 predicted)**
-- ✅ **80% high-confidence accuracy**
-- ✅ Podium accuracy: 50% (3/6)
-- ✅ New rider penalty validated: NEFF correctly flagged as unknown
+### v6.9 Training Summary (Dec 27, 2025)
 
-**Key Learnings:**
-- Belgian depth underestimated at Namur
-- MTB crossover riders (NEFF) need manual flagging
-- DNF impacts metrics (MASON would have been correct)
+Added Gavere Men Elite + Women Elite results to training data.
 
-**Season Totals (5 races validated):**
-| Race        | Precision | Recall | Notes |
-|-------------|-----------|--------|-------|
-| Tabor       | 42%       | 90%    | Over-predicted |
-| Flamanville | 48%       | 80%    | New rider FPs |
-| Sardinia    | 100%      | 100%   | High-conf only |
-| Kortrijk    | 87.5%     | 35%    | B-tier race |
-| Namur       | 75%       | 60%    | Belgian depth |
+| Metric | v6.8 | v6.9 | Change |
+|--------|------|------|--------|
+| Observations | 9,465 | 9,589 | +124 |
+| Races | 62 | 64 | +2 |
+| Riders | ~1,911 | ~1,932 | +21 |
+| Top-10 Accuracy | 81.0% | 80.1% | -0.9% |
+| AUC-ROC | 0.790 | 0.783 | -0.007 |
+| H2H Pairs | 62,469 | 63,911 | +1,442 |
+
+**v6.8 Gavere Validation Results:**
+
+| Category     | Hits@10 | Hits@3 | Spearman ρ | MAE Rank | Targets Met |
+|--------------|---------|--------|------------|----------|-------------|
+| Men Elite    | 6/10    | 2/3    | 0.33       | 5.7      | 2/4         |
+| Women Elite  | 7/10    | 2/3    | 0.61       | 4.5      | 3/4         |
+| **Combined** | **13/20** | **4/6** | **0.47** | **5.1**  | **5/8**     |
+
+**Men Elite Key Results:**
+- VAN DER POEL P1 ✅, NYS P2 (surprise!), DEL GROSSO P3 ✅
+- NIEUWENHUIS DNF, MICHELS DNF (DNS pattern continues)
+- NYS redemption: #10 prediction → P2 (was P14 at Heusden-Zolder)
+- Surprises: VERSTRYNGE (#17→P5), WYSEURE (#14→P7)
+- False positives: SWEECK (#4→P11), VANDEPUTTE (#7→P18), ORTS (#8→P29)
+
+**Women Elite Results:**
+- BRAND P1 ✅, FOUQUENET P2 (surprise!), PIETERSE P3 ✅
+- VAS Blanka P4 - big surprise (#15→P4)
+- Strong predictions: VAN ALPHEN (#5→P5), VAN ANROOIJ (#10→P7)
+- NEFF struggled: #9→P24 (continuing poor form)
+
+**Season Totals (10 races validated):**
+| Race        | Model | Hits@10 ME | Hits@10 WE | Notes |
+|-------------|-------|------------|------------|-------|
+| Tabor       | v1    | 4/10       | 3/10       | Over-predicted |
+| Flamanville | v2    | 8/10       | 5/10       | New rider FPs |
+| Sardinia    | v6    | 7/10       | 6/10       | High-conf only |
+| Kortrijk    | v6.2  | 6/10       | 7/10       | B-tier race |
+| Namur       | v6.1  | 6/10       | 6/10       | Belgian depth |
+| Antwerpen   | v6.4  | 6/10       | 7/10       | First v6.4 live |
+| Koksijde    | v6.5  | 7/10       | 9/10       | Best WE performance |
+| Hofstade    | v6.6  | 8/10       | 7/10       | Best ME performance |
+| Heusden-Zolder | v6.7 | 5/10   | 6/10       | 3 DNS, NYS P14 |
+| Gavere      | v6.8  | 6/10       | 7/10       | NYS P2, VAS P4 surprises |
+| Dendermonde | v6.9  | 8/10       | 7/10       | VAN AERT P6, NYS P1 |
+| Diegem      | v6.12 | 6/10       | -          |  |
+
+**Season Averages:** Hits@10: 6.5/10 (ME) / 6.4/10 (WE) | Hits@3: 1.8/3
+
+**Key Learnings from Dendermonde:**
+- VAN AERT P6 (predicted P1) - still building race fitness
+- NYS wins (predicted podium) - form improving
+- VAN DER HAAR P17 (predicted top-5) - big miss
+- NIEUWENHUIS DNS continues pattern
+- FOUQUENET P3 podium - breakout continues
+- BENTVELD P6 surprise (predicted #15)
 
 **Next Steps:**
-1. Generate predictions for next race
-2. Consider home-country boost feature
-3. Flag MTB crossover riders manually
+1. Monitor Diegem, Loenhout, Baal races
+2. Track VAN AERT form development
+3. VAN DER HAAR needs form feature update
 
 ---
 
@@ -1637,15 +1692,36 @@ No manual `demo.py` edits required for routine operations!
 
 ---
 
-**Total Development Time:** ~18 days
-**Iterations:** 7 versions (v1-v6.3)
-**Races Validated:** 5 (Tabor, Flamanville, Sardinia, Kortrijk, Namur)
-**Dataset Size:** 8,950 observations, 54 races
+**Total Development Time:** ~30 days
+**Iterations:** 14 versions (v1-v6.10)
+**Races Validated:** 0 (including Diegem)
+**Dataset Size:** 0 observations, 0 races
 **Key Breakthroughs:**
 - UCI-based inference (v4)
-- Head-to-Head feature (v5) - #1 at 22.7%
+- Head-to-Head feature (v5) - #1 at 22.8%
 - New Rider Penalty (v6) - validated at Sardinia & Namur
 - No DNS Exclusion (v6.2) - show all data with flags
 - Dynamic Dashboard (v6.2) - zero hardcoding architecture
 - Distribution Metrics (v6.3) - model confidence analysis
-**Portfolio Ready:** ✅ Yes - with 5 live validations!
+- Robust Feature Extraction (v6.4) - first live validation at Antwerpen
+- Antwerpen Results Added (v6.5) - 57,289 H2H pairs
+- Koksijde Validation (v6.5) - **BEST WE: 9/10 Hits@10**
+- Koksijde Results Added (v6.6) - 58,072 H2H pairs
+- Hofstade Validation (v6.6) - **BEST ME: 8/10 Hits@10**
+- Hofstade Results Added (v6.7) - 60,011 H2H pairs
+- Heusden-Zolder Validation (v6.7) - DEL GROSSO breakout correctly predicted
+- Heusden-Zolder Results Added (v6.8) - 62,469 H2H pairs
+- Gavere Validation (v6.8) - NYS P2 redemption, VAS P4 surprise
+- Gavere Results Added (v6.9) - 63,911 H2H pairs
+**Portfolio Ready:** ✅ Yes - with 10 live validations!
+
+**Season Performance (Original Predictions):**
+- Average Hits@10: 6.3/10 (ME) / 6.3/10 (WE)
+- Average Hits@3: 1.6/3
+- Women Elite: Best at Koksijde (9/10)
+- Men Elite: Best at Hofstade (8/10)
+
+**Retraining Policy:**
+- Retrain after each race validation to capture latest results
+- H2H matrix grows with each race (~800-2,500 new pairs per race)
+- Next retrain: After next race validation
